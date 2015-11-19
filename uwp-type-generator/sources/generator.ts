@@ -1,4 +1,4 @@
-﻿declare var log: HTMLParagraphElement;
+﻿declare var log: HTMLDivElement;
 
 //interface Reference {
 //    desciption: string;
@@ -15,8 +15,10 @@
 //    type: string;
 //}
 
-type TypeDescription = { __type: "unknown" | "class" | "structure"; __fullname: string };
+interface TypeDescription { __type: "class" | "structure"; __fullname: string; };
 type TypeNameOrDescription = string | TypeDescription;
+
+interface ClassDescription { __type: "class"; __fullname: string; static: TypeDescription; prototype: TypeDescription; }
 
 async function generate() {
     //let referenceMap: { [key: string]: Reference } = {};
@@ -26,44 +28,89 @@ async function generate() {
     //catch (e) {
     //    debugger;
     //}
-    //await enumerate("Windows", Windows);
+    try {
+        return await enumerate("Windows", Windows);
+    }
+    catch (e) {
+        debugger;
+    }
 
-    async function enumerate(namespace: string, obj: any) {
-        for (var itemName in obj) {
-            let item = obj[itemName];
-            let fullName = `${namespace}.${itemName}`;
+    async function enumerate(fullName: string, namespace: any) {
+        let description = {
+            __type: "structure", __fullname: fullName
+        } as TypeDescription;
+
+        let properties = new Set(Object.getOwnPropertyNames(namespace));
+        properties.delete("length");
+        properties.delete("name");
+        properties.delete("caller");
+        properties.delete("arguments");
+        properties.delete("toString");
+        properties.delete("constructor"); // should be added by mapper
+
+        for (let itemName in namespace) {
+            let item: any;
+            try {
+                item = namespace[itemName];
+            }
+            catch (e) {
+                description[itemName] = "unknown";
+                // Some class constructor exposes static properties that allow access only in specific environment
+                // e.g. Windows.ApplicationModel.Store.CurrentApp
+            }
+            let itemFullName = `${fullName}.${itemName}`;
             let type = typeof item;
             if ((itemName as string)[0].toUpperCase() === itemName[0]) {
                 // Assume that upper cased item is a namespace
                 if (item != null) {
                     if (type === "object") {
-                        await write(fullName);
-                        await enumerate(fullName, item);
+                        await write(itemFullName);
+                        description[itemName] = await enumerate(itemFullName, item);
                     }
                     else {
-                        await write(`${fullName}: class extends ${item.prototype.__proto__.constructor.name}`);
-                        await enumerate(fullName, item); // static member
-                        await enumerateMember(fullName, item);
+                        await write(`${itemFullName}: class extends ${item.prototype.__proto__.constructor.name}`);
+                        description[itemName] = await enumerateClass(itemFullName, item);
                     }
                 }
                 else {
-                    await write(`${fullName}: ${item}`);
+                    await write(`${itemFullName}: ${item}`);
+                    description[itemName] = item === null ? "null" : "undefined";
                 }
             }
             else {
                 if (type === "object") {
-                    type = item.prototype.constructor.name;
+                    if (item !== null) {
+                        type = item.__proto__.constructor.name;
+                    }
+                    else { // null
+                        type = "null";
+                    }
                 }
-                await write(`${fullName}: ${type}`);
+                description[itemName] = type;
+                await write(`${itemFullName}: ${type}`);
             }
         }
+        return description;
     }
+
+    async function enumerateClass(fullname: string, constructor: any) {
+        let description = await enumerate(fullname, constructor) as ClassDescription;
+        description.__type = "class";
+        description.prototype = await enumerateMember(fullname, constructor);
+
+        return description;
+    }
+
     async function enumerateMember(fullName: string, constructor: any) {
+        let description = {
+            __type: "structure", __fullname: fullName
+        } as TypeDescription;
         for (let memberName of Object.getOwnPropertyNames(constructor.prototype)) {
             let memberFullName = `${fullName}.${memberName}`;
-            let mappedType = referenceMap[memberFullName.toLowerCase()];
-            await write(`${fullName}.${memberName} (member): ${mappedType && mappedType.type}`);
+            description[memberName] = "unknown";
+            await write(`${memberFullName} (member)`);
         }
+        return description;
     }
 
     //async function map() {
@@ -116,6 +163,21 @@ async function generate() {
         let p = document.createElement("p");
         p.textContent = text;
         log.appendChild(p);
+        if (log.children.length > 100) {
+            log.firstElementChild.remove();
+        }
         await Promise.resolve();
     }
+}
+
+async function save(result: string) {
+    let picker = new Windows.Storage.Pickers.FileSavePicker();
+    picker.fileTypeChoices.insert("JSON format", [".json"] as any);
+    let file = await picker.pickSaveFileAsync();
+    let write = await file.openTransactedWriteAsync();
+    let datawriter = new Windows.Storage.Streams.DataWriter(write.stream);
+    datawriter.writeString(result);
+    await datawriter.storeAsync();
+    await datawriter.flushAsync();
+    datawriter.dispose();
 }

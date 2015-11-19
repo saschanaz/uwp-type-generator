@@ -8,7 +8,7 @@
 
 	app.onactivated = function (args) {
 	    if (args.detail.kind === activation.ActivationKind.launch) {
-	        generate();
+	        generate().then((result) => save(result));
 			if (args.detail.previousExecutionState !== activation.ApplicationExecutionState.terminated) {
 				// TODO: This application has been newly launched. Initialize your application here.
 			} else {
