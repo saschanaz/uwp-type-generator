@@ -1,19 +1,6 @@
 ﻿declare var log: HTMLDivElement;
 
-//interface Reference {
-//    desciption: string;
-//    signatures: FunctionSignature[];
-//    type: string;
-//}
 
-//interface FunctionSignature {
-//    parameters: KeyTypePair[];// 
-//    return: string;
-//}
-//interface KeyTypePair {
-//    key: string;
-//    type: string;
-//}
 
 interface TypeDescription { __type: "class" | "structure"; __fullname: string; };
 type TypeNameOrDescription = string | TypeDescription;
@@ -21,13 +8,6 @@ type TypeNameOrDescription = string | TypeDescription;
 interface ClassDescription { __type: "class"; __fullname: string; __extends: TypeDescription; prototype: TypeDescription; }
 
 async function generate() {
-    //let referenceMap: { [key: string]: Reference } = {};
-    //try {
-    //    await map();
-    //}
-    //catch (e) {
-    //    debugger;
-    //}
     try {
         return await enumerate("Windows", Windows);
     }
@@ -116,52 +96,6 @@ async function generate() {
         }
         return description;
     }
-
-    //async function map() {
-    //    let apppath = await Windows.ApplicationModel.Package.current.installedLocation;
-    //    let referencepath = await apppath.getFolderAsync("referencedocs");
-    //    let files = await referencepath.getFilesAsync();
-        
-    //    for (let file of <Windows.Storage.StorageFile[]><any>files) {
-    //        let text = await Windows.Storage.FileIO.readTextAsync(file);
-    //        let doc = new DOMParser().parseFromString(text, "text/html");
-    //        let meta = doc.head.querySelector("meta[name$=F1]") as HTMLMetaElement;
-    //        if (!meta)
-    //            continue;
-    //        let f1 = meta.content.toLowerCase();
-    //        let mainSection = doc.body.querySelector("div#mainSection");
-    //        let mainContent = mainSection.textContent
-    //        let desciption = mainContent.slice(0, mainContent.search(/\sSyntax\s/)).trim().replace(/\s{1,}/g, " ");
-    //        let title = doc.body.querySelector("div.title").textContent.trim();
-    //        let type: string;
-    //        if (title.endsWith(" class")) {
-    //            type = "class";
-    //        }
-    //        else if (title.endsWith(" property")) {
-    //            let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Property value"))[0]
-    //            if (before) {
-    //                let typeDescriptor = before.nextElementSibling.textContent.trim().replace(/\s{1,}/g, " ");
-    //                let typeTextIndex = typeDescriptor.indexOf("Type:");
-    //                let jsIndicationIndex = typeDescriptor.indexOf("[");
-    //                if (jsIndicationIndex !== -1) {
-    //                    type = typeDescriptor.slice(typeTextIndex + 5, jsIndicationIndex).trim();
-    //                }
-    //                else {
-    //                    type = typeDescriptor.slice(typeTextIndex + 5).trim();
-    //                }
-    //            }
-    //            else {
-    //                debugger;
-    //            }
-    //        }
-
-
-    //        referenceMap[f1] = {
-    //            desciption,
-    //            type
-    //        } as Reference;
-    //    }
-    //}
     
     async function write(text: string) {
         let p = document.createElement("p");

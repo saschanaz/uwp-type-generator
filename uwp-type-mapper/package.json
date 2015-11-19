@@ -1,0 +1,13 @@
+{
+    "name": "uwp-type-mapper",
+    "version": "0.0.0",
+    "description": "uwp-type-mapper",
+    "main": "app.js",
+    "author": {
+        "email": "saschanaz@outlook.com",
+        "name": "saschanaz"
+    },
+    "dependencies": {
+        "xmldom": "latest"
+    }
+}

@@ -83,13 +83,9 @@
     <Content Include="WinJS\js\en-US\ui.strings.js" />
     <Content Include="WinJS\js\base.js" />
     <Content Include="WinJS\js\ui.js" />
-    <None Include="uwp.ts Generator_TemporaryKey.pfx" />
+    <None Include="uwp-type-generator_TemporaryKey.pfx" />
     <TypeScriptCompile Include="declarations\winrt.d.ts" />
     <TypeScriptCompile Include="sources\generator.ts" />
-    <!-- <Content Include="referencedocs/R2241.htm" /> -->
-    <!-- <Content Include="referencedocs/R2250.htm" /> -->
-    <!-- <Content Include="referencedocs/R2255.htm" /> -->
-    <!-- <Content Include="referencedocs/R2264.htm" /> -->
   </ItemGroup>
   <ItemGroup>
     <Service Include="{4a0dddb5-7a95-4fbf-97cc-616d07737a77}" />
