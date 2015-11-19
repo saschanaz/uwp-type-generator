@@ -18,7 +18,7 @@
 interface TypeDescription { __type: "class" | "structure"; __fullname: string; };
 type TypeNameOrDescription = string | TypeDescription;
 
-interface ClassDescription { __type: "class"; __fullname: string; static: TypeDescription; prototype: TypeDescription; }
+interface ClassDescription { __type: "class"; __fullname: string; __extends: TypeDescription; prototype: TypeDescription; }
 
 async function generate() {
     //let referenceMap: { [key: string]: Reference } = {};
@@ -96,6 +96,7 @@ async function generate() {
     async function enumerateClass(fullname: string, constructor: any) {
         let description = await enumerate(fullname, constructor) as ClassDescription;
         description.__type = "class";
+        description.__extends = constructor.prototype.__proto__.constructor.name;
         description.prototype = await enumerateMember(fullname, constructor);
 
         return description;
@@ -105,7 +106,10 @@ async function generate() {
         let description = {
             __type: "structure", __fullname: fullName
         } as TypeDescription;
-        for (let memberName of Object.getOwnPropertyNames(constructor.prototype)) {
+        let properties = new Set(Object.getOwnPropertyNames(constructor.prototype));
+        properties.delete("toString");
+        properties.delete("constructor");
+        for (let memberName of properties) {
             let memberFullName = `${fullName}.${memberName}`;
             description[memberName] = "unknown";
             await write(`${memberFullName} (member)`);
@@ -174,10 +178,12 @@ async function save(result: string) {
     let picker = new Windows.Storage.Pickers.FileSavePicker();
     picker.fileTypeChoices.insert("JSON format", [".json"] as any);
     let file = await picker.pickSaveFileAsync();
-    let write = await file.openTransactedWriteAsync();
-    let datawriter = new Windows.Storage.Streams.DataWriter(write.stream);
-    datawriter.writeString(result);
+    let writeStream = await file.openAsync(Windows.Storage.FileAccessMode.readWrite);
+    let datawriter = new Windows.Storage.Streams.DataWriter(writeStream);
+    datawriter.writeString(JSON.stringify(result, null, 2));
     await datawriter.storeAsync();
+    await writeStream.flushAsync();
+    writeStream.close();
     await datawriter.flushAsync();
     datawriter.dispose();
 }
