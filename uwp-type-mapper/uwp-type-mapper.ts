@@ -3,14 +3,18 @@
 import * as fs from "fs"
 import * as jsdom from "jsdom"
 
-interface Reference {
-    desciption: string;
-    signatures: FunctionSignature[];
+interface TypeNotation {
+    description: string;
     type: string;
 }
 
+interface FunctionTypeNotation {
+    description: string;
+    type: "function";
+    signatures: FunctionSignature[];
+}
 interface FunctionSignature {
-    parameters: KeyTypePair[];// 
+    parameters: KeyTypePair[]; 
     return: string;
 }
 interface KeyTypePair {
@@ -18,26 +22,25 @@ interface KeyTypePair {
     type: string;
 }
 
-interface TypeDescription { __type: "class" | "structure"; __fullname: string; };
-type TypeNameOrDescription = string | TypeDescription;
-
-interface ClassDescription { __type: "class"; __fullname: string; __extends: TypeDescription; prototype: TypeDescription; }
-
 generateMapFile();
 
 async function generateMapFile() {
     try {
-        console.log(await parse());
+        if (!(await fsExists("built"))) {
+            await fsMakeDirectory("built");
+        }
+        await fsWriteFile("built/typemap.json", JSON.stringify(await parse(), null, 2));
+        process.exit();
     }
     catch (e) {
         debugger;
     }
 
     async function parse() {
-        let referenceMap: { [key: string]: Reference } = {};
+        let referenceMap: { [key: string]: TypeNotation } = {};
 
         let referencepath = "referencedocs";
-        let mshelppath = "ms-help://";
+        let mshelppath = "ms-xhelp:///?Id=T%3a";
         let bracketRegex = /\[[^\[]*\]/;
         let files = await fsReadFiles(referencepath);
         let skippedById: string[] = [];
@@ -68,45 +71,45 @@ async function generateMapFile() {
             }
             let mainSection = doc.body.querySelector("div#mainSection");
             let mainContent = mainSection.textContent
-            let desciption = mainContent.slice(0, mainContent.search(/\sSyntax\s/)).trim().replace(/\s{1,}/g, " ");
+            let description = mainContent.slice(0, mainContent.search(/\sSyntax\s/)).trim().replace(/\s{1,}/g, " ");
             let title = doc.body.querySelector("div.title").textContent.trim();
-            let type: string;
             if (title.endsWith(" class")) {
-                type = "class";
+                referenceMap[helpId] = {
+                    description,
+                    type: "class"
+                } as TypeNotation;
             }
             else if (title.endsWith(" property")) {
+                let type: string;
                 let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Property value"))[0];
-                if (before) {
-                    let typeNotationParagraph = before.nextElementSibling;
-                    let typeInfo: string | Map<string, string>;
-                    try {
-                        typeInfo = parsePropertyTypeNotation(typeNotationParagraph as HTMLParagraphElement);
-                    }
-                    catch (e) {
-                        continue;
-                    }
-                    if (typeof typeInfo === "string") {
-                        type = typeInfo;
-                    }
-                    else if (typeInfo.has("JavaScript")) {
-                        type = typeInfo.get("JavaScript");
-                    }
-                    else {
-                        continue; // no type for JS
-                    }
+                let typeNotationParagraph = before.nextElementSibling;
+                let typeInfo = parsePropertyTypeNotation(typeNotationParagraph as HTMLParagraphElement);
+                if (typeof typeInfo === "string") {
+                    type = typeInfo;
+                }
+                else if (typeInfo.has("JavaScript")) {
+                    type = typeInfo.get("JavaScript");
                 }
                 else {
-                    debugger;
+                    continue; // no type for JS
                 }
+                
+                referenceMap[helpId] = {
+                    description,
+                    type
+                } as TypeNotation;
             }
             else if (title.endsWith(" constructor")) {
                 continue; // TODO
+                // Note: store as helpId.constructor
             }
             else if (title.endsWith(" constructors")) {
                 continue; // TODO
+                // Note: store as helpId.constructor
             }
             else if (title.endsWith(" method")) {
                 continue; // TODO
+                // Proposal: insert FunctionTypeNotation, and later check same key exists and append more signatures
             }
             else if (title.endsWith(" methods")) {
                 continue; // TODO: how should multiple method signatures be processed?
@@ -133,20 +136,12 @@ async function generateMapFile() {
                 debugger;
                 continue;
             }
-
-
-            referenceMap[helpId] = {
-                desciption,
-                type
-            } as Reference;
         }
 
         return referenceMap;
 
 
         function parsePropertyTypeNotation(notationElement: HTMLParagraphElement): string | Map<string, string> {
-            
-
             /*
             Expect "Type:"
             If sliced text still have non-whitespace text:
@@ -190,8 +185,9 @@ async function generateMapFile() {
             let proposedTypeName: string;
 
             node = node.nextSibling;
-            let trimmedTextContent = node.textContent.trim();
+            let trimmedTextContent: string;
             while (node) {
+                trimmedTextContent = node.textContent.trim();
                 if (isElement(node)) {
                     if (isAnchorElement(node)) {
                         // TODO: parse
@@ -216,7 +212,6 @@ async function generateMapFile() {
                     }
                 }
                 node = node.nextSibling;
-                trimmedTextContent = node.textContent.trim();
             }
             if (typeMap.size === 0) {
                 return proposedTypeName;
@@ -260,6 +255,39 @@ function fsReadFile(path: string) {
             else {
                 resolve(data);
             }
+        });
+    });
+}
+
+function fsWriteFile(path: string, content: string) {
+    return new Promise<void>((resolve, reject) => {
+        fs.writeFile(path, content, (err, data) => {
+            if (err) {
+                reject(err);
+            }
+            else {
+                resolve(data);
+            }
+        });
+    });
+}
+
+function fsMakeDirectory(path: string) {
+    return new Promise<void>((resolve, reject) => {
+        fs.mkdir(path, (err) => {
+            if (err) {
+                reject(err);
+            }
+            else {
+                resolve();
+            }
+        })
+    })
+}
+function fsExists(path: string) {
+    return new Promise<boolean>((resolve, reject) => {
+        fs.exists(path, (exists) => {
+            resolve(exists);
         });
     });
 }

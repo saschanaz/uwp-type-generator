@@ -1,4 +1,5 @@
 **/referencedocs/
+**/built/
 uwp-type-generator/js/app.js
 uwp-type-generator/js/app.js.map
 uwp-type-mapper/uwp-type-mapper.js
