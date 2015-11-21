@@ -16,7 +16,7 @@ interface FunctionTypeNotation {
 interface FunctionSignature {
     description: string;
     parameters: FunctionParameter[]; 
-    return: string;
+    return: "instance" | TypeNotation;
 }
 interface FunctionParameter {
     description: string;
@@ -38,6 +38,7 @@ async function generateMapFile() {
         debugger;
     }
 
+    // TODO: receive path array (files from metro/, store/, etc)
     async function parse() {
         let referenceMap = new Map<string, TypeNotation>();
 
@@ -72,6 +73,7 @@ async function generateMapFile() {
             if (helpId.startsWith("windows.ui.xaml")) {
                 continue; // Do not parse XAML API
             }
+            // TODO: use target language meta tag? it can only be used with VS document
             let mainSection = doc.body.querySelector("div#mainSection");
             let mainContent = mainSection.textContent
             let description = inline(mainContent.slice(0, mainContent.search(/\sSyntax\s/)))
@@ -86,19 +88,13 @@ async function generateMapFile() {
             }
             else if (title.endsWith(" property")) {
                 // example URL: https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.background.smartcardtrigger.triggertype.aspx
-
-                let type: string;
+                
                 let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Property value"))[0];
                 let typeNotationParagraph = before.nextElementSibling;
-                let typeInfo = parseTypeNotation(typeNotationParagraph as HTMLParagraphElement);
-                if (typeof typeInfo === "string") {
-                    type = typeInfo;
-                }
-                else if (typeInfo.has("JavaScript")) {
-                    type = typeInfo.get("JavaScript");
-                }
-                else {
-                    continue; // no type for JS
+                let type = exportJavaScriptTypeNotation(parseTypeNotation(typeNotationParagraph as HTMLParagraphElement));
+                if (!type) {
+                    // JS incompatble
+                    continue;
                 }
 
                 referenceMap.set(helpId, {
@@ -127,44 +123,16 @@ async function generateMapFile() {
 
                 let signature = {
                     description,
-                    parameters: [],
+                    parameters: undefined,
                     return: "instance"
                 } as FunctionSignature;
 
                 let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Parameters"))[0];
-                let parameterList = before.nextElementSibling as HTMLDListElement;
-                let childItems = Array.from(parameterList.children) as HTMLElement[];
-
-                let parameterName: string;
-                for (let child of childItems) {
-                    if (child.tagName === "DT") {
-                        parameterName = child.textContent.trim();
-                    }
-                    else if (child.tagName === "DD") {
-                        let parameterType: string;
-                        let parameterTypeInfo = parseTypeNotation(child.children[0] as HTMLParagraphElement);
-                        if (typeof parameterTypeInfo === "string") {
-                            parameterType = parameterTypeInfo;
-                        }
-                        else if (parameterTypeInfo.has("JavaScript")) {
-                            parameterType = parameterTypeInfo.get("JavaScript");
-                        }
-
-                        let parameterDescription: string;
-                        if (child.children[1]) {
-                            parameterDescription = inline(child.children[1].textContent);;
-                        }
-
-                        signature.parameters.push({
-                            description: parameterDescription,
-                            type: parameterType,
-                            key: parameterName
-                        });
-                    }
-                    else {
-                        debugger;
-                        throw new Error("Unexpected element");
-                    }
+                let parameterListElement = before.nextElementSibling as HTMLDListElement;
+                signature.parameters = parseParameterList(parameterListElement);
+                if (!signature.parameters) {
+                    // JS incompatible
+                    continue;
                 }
                 
                 let notation = referenceMap.get(helpId) as FunctionTypeNotation || {
@@ -178,7 +146,47 @@ async function generateMapFile() {
                 // Note: replace .#ctor(params) to .constructor
             }
             else if (title.endsWith(" method")) {
-                continue; // TODO
+                let signature = {
+                    description,
+                    parameters: undefined,
+                    return: undefined
+                } as FunctionSignature;
+
+                // TODO: remove call syntax from helpId so that signature can correctly be appended
+
+                let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Parameters"))[0];
+                let parameterListElement = before.nextElementSibling as HTMLDListElement;
+                signature.parameters = parseParameterList(parameterListElement);
+                if (!signature.parameters) {
+                    // JS incompatible
+                    continue;
+                }
+
+                before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Return value"))[0];
+                if (before) {
+                    let typeNotationElement = before.nextElementSibling as HTMLParagraphElement;
+                    let typeDescriptionElement = typeNotationElement.nextElementSibling;
+
+                    let type = exportJavaScriptTypeNotation(parseTypeNotation(typeNotationElement));
+                    if (!type) {
+                        // JS incompatible
+                        continue;
+                    }
+
+                    signature.return = {
+                        description: inline(typeDescriptionElement.textContent),
+                        type: parseTypeNotation(typeNotationElement)
+                    } as TypeNotation;
+                }
+
+                let notation = referenceMap.get(helpId) as FunctionTypeNotation || {
+                    description: "", // 
+                    type: "function",
+                    signatures: []
+                } as FunctionTypeNotation;
+                notation.signatures.push(signature);
+
+                referenceMap.set(helpId, notation);
                 // Proposal: insert FunctionTypeNotation, and later check same key exists and append more signatures
             }
             else if (title.endsWith(" enumeration")) {
@@ -194,6 +202,7 @@ async function generateMapFile() {
                 // Just parse the description
             }
             else if (title.endsWith(" delegate") || title.endsWith(" delegates")) {
+                // example URL: https://msdn.microsoft.com/en-us/library/windows/apps/br206577.aspx
                 continue; // TODO: eventargs
             }
             else if (title.endsWith(" structure") || title.endsWith(" interface")) {
@@ -210,6 +219,41 @@ async function generateMapFile() {
 
         return referenceMap;
 
+
+        function parseParameterList(listElement: HTMLDListElement): FunctionParameter[] {
+            let parameters: FunctionParameter[] = [];
+            let childItems = Array.from(listElement.children) as HTMLElement[];
+
+            let parameterName: string;
+            for (let child of childItems) {
+                if (child.tagName === "DT") {
+                    parameterName = child.textContent.trim();
+                }
+                else if (child.tagName === "DD") {
+                    let parameterType = exportJavaScriptTypeNotation(parseTypeNotation(child.children[0] as HTMLParagraphElement));
+                    if (!parameterType) {
+                        // No JS type
+                        return;
+                    }
+
+                    let parameterDescription: string;
+                    if (child.children[1]) {
+                        parameterDescription = inline(child.children[1].textContent);;
+                    }
+
+                    parameters.push({
+                        description: parameterDescription,
+                        type: parameterType,
+                        key: parameterName
+                    });
+                }
+                else {
+                    debugger;
+                    throw new Error("Unexpected element");
+                }
+            }
+            return parameters;
+        }
 
         function parseTypeNotation(notationElement: HTMLParagraphElement): string | Map<string, string> {
             /*
@@ -230,6 +274,15 @@ async function generateMapFile() {
                     Try parsing it as language indicator
                 Else:
                     Break, assuming there is no more type description
+
+
+            Define Parsing as language indicator: 
+                Slice(1, -1)
+                If indexof '/' exists:
+                    Split the string by '/'
+                    Return result array
+                Else
+                    Return [text]
             */
             let typeMap = new Map<string, string>();
 
@@ -239,8 +292,11 @@ async function generateMapFile() {
                 if (sliced.length > 0) {
                     let brackets = bracketRegex.exec(sliced);
                     if (brackets) {
+                        let parsedLanguages = parseLanguageIndicator(sliced.substr(brackets.index, brackets[0].length))
                         // language name, type name
-                        typeMap.set(sliced.substr(brackets.index + 1, brackets[0].length - 2), sliced.slice(0, brackets.index));
+                        for (let language of parsedLanguages) {
+                            typeMap.set(language, sliced.slice(0, brackets.index));
+                        }
                     }
                     else {
                         return sliced;
@@ -274,7 +330,10 @@ async function generateMapFile() {
                 else if (isText(node) && trimmedTextContent.length > 0) {
                     let brackets = bracketRegex.exec(trimmedTextContent);
                     if (brackets) {
-                        typeMap.set(trimmedTextContent.substr(brackets.index + 1, brackets[0].length - 2), proposedTypeName);
+                        let parsedLanguages = parseLanguageIndicator(trimmedTextContent.substr(brackets.index, brackets[0].length))
+                        for (let language of parsedLanguages) {
+                            typeMap.set(language, proposedTypeName);
+                        }
                     }
                     else {
                         debugger;
@@ -288,6 +347,26 @@ async function generateMapFile() {
             }
             else {
                 return typeMap;
+            }
+        }
+
+        function parseLanguageIndicator(text: string) {
+            /* Expect potential slash-separated input */
+            text = text.slice(1, -1);
+            if (text.indexOf('/') !== -1) {
+                return text.split('/');
+            }
+            else {
+                return [text];
+            }
+        }
+
+        function exportJavaScriptTypeNotation(notation: string | Map<string, string>) {
+            if (typeof notation === "string") {
+                return notation;
+            }
+            else {
+                return notation.get("JavaScript");
             }
         }
 
