@@ -9,17 +9,19 @@ interface TypeNotation {
 }
 
 interface FunctionTypeNotation {
-    description: string;
+    description: ""; // describe in signature object
     type: "function";
     signatures: FunctionSignature[];
 }
 interface FunctionSignature {
-    parameters: KeyTypePair[]; 
+    description: string;
+    parameters: FunctionParameter[]; 
     return: string;
 }
-interface KeyTypePair {
-    key: string;
+interface FunctionParameter {
+    description: string;
     type: string;
+    key: string;
 }
 
 generateMapFile();
@@ -29,7 +31,7 @@ async function generateMapFile() {
         if (!(await fsExists("built"))) {
             await fsMakeDirectory("built");
         }
-        await fsWriteFile("built/typemap.json", JSON.stringify(await parse(), null, 2));
+        await fsWriteFile("built/typemap.json", JSON.stringify(objectify(await parse()), null, 2));
         process.exit();
     }
     catch (e) {
@@ -37,11 +39,12 @@ async function generateMapFile() {
     }
 
     async function parse() {
-        let referenceMap: { [key: string]: TypeNotation } = {};
+        let referenceMap = new Map<string, TypeNotation>();
 
         let referencepath = "referencedocs";
         let mshelppath = "ms-xhelp:///?Id=T%3a";
         let bracketRegex = /\[[^\[]*\]/;
+        let whitespaceRepeatRegex = /\s{1,}/g;
         let files = await fsReadFiles(referencepath);
         let skippedById: string[] = [];
 
@@ -71,19 +74,23 @@ async function generateMapFile() {
             }
             let mainSection = doc.body.querySelector("div#mainSection");
             let mainContent = mainSection.textContent
-            let description = mainContent.slice(0, mainContent.search(/\sSyntax\s/)).trim().replace(/\s{1,}/g, " ");
+            let description = inline(mainContent.slice(0, mainContent.search(/\sSyntax\s/)))
             let title = doc.body.querySelector("div.title").textContent.trim();
             if (title.endsWith(" class")) {
-                referenceMap[helpId] = {
+                // https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.background.smartcardtrigger.aspx
+
+                referenceMap.set(helpId, {
                     description,
                     type: "class"
-                } as TypeNotation;
+                } as TypeNotation);
             }
             else if (title.endsWith(" property")) {
+                // example URL: https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.background.smartcardtrigger.triggertype.aspx
+
                 let type: string;
                 let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Property value"))[0];
                 let typeNotationParagraph = before.nextElementSibling;
-                let typeInfo = parsePropertyTypeNotation(typeNotationParagraph as HTMLParagraphElement);
+                let typeInfo = parseTypeNotation(typeNotationParagraph as HTMLParagraphElement);
                 if (typeof typeInfo === "string") {
                     type = typeInfo;
                 }
@@ -93,26 +100,86 @@ async function generateMapFile() {
                 else {
                     continue; // no type for JS
                 }
-                
-                referenceMap[helpId] = {
+
+                referenceMap.set(helpId, {
                     description,
                     type
-                } as TypeNotation;
+                } as TypeNotation);
             }
             else if (title.endsWith(" constructor")) {
-                continue; // TODO
-                // Note: store as helpId.constructor
-            }
-            else if (title.endsWith(" constructors")) {
-                continue; // TODO
-                // Note: store as helpId.constructor
+                // example URL
+                // no parameter:
+                // https://msdn.microsoft.com/en-us/library/windows/apps/dn858104.aspx
+                // one parameter:
+                // https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.background.smartcardtrigger.smartcardtrigger.aspx
+                // multiple parameters:
+                // https://msdn.microsoft.com/en-us/library/windows/apps/dn631282.aspx
+
+                
+                let ctorIndex = helpId.indexOf(".#ctor");
+                if (ctorIndex !== -1) {
+                    helpId = `${helpId.slice(0, ctorIndex)}.constructor`;
+                }
+                else {
+                    debugger;
+                    throw new Error("Expected .ctor but not found");
+                }
+
+                let signature = {
+                    description,
+                    parameters: [],
+                    return: "instance"
+                } as FunctionSignature;
+
+                let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Parameters"))[0];
+                let parameterList = before.nextElementSibling as HTMLDListElement;
+                let childItems = Array.from(parameterList.children) as HTMLElement[];
+
+                let parameterName: string;
+                for (let child of childItems) {
+                    if (child.tagName === "DT") {
+                        parameterName = child.textContent.trim();
+                    }
+                    else if (child.tagName === "DD") {
+                        let parameterType: string;
+                        let parameterTypeInfo = parseTypeNotation(child.children[0] as HTMLParagraphElement);
+                        if (typeof parameterTypeInfo === "string") {
+                            parameterType = parameterTypeInfo;
+                        }
+                        else if (parameterTypeInfo.has("JavaScript")) {
+                            parameterType = parameterTypeInfo.get("JavaScript");
+                        }
+
+                        let parameterDescription: string;
+                        if (child.children[1]) {
+                            parameterDescription = inline(child.children[1].textContent);;
+                        }
+
+                        signature.parameters.push({
+                            description: parameterDescription,
+                            type: parameterType,
+                            key: parameterName
+                        });
+                    }
+                    else {
+                        debugger;
+                        throw new Error("Unexpected element");
+                    }
+                }
+                
+                let notation = referenceMap.get(helpId) as FunctionTypeNotation || {
+                    description: "", // 
+                    type: "function",
+                    signatures: []
+                } as FunctionTypeNotation;
+                notation.signatures.push(signature);
+
+                referenceMap.set(helpId, notation);
+                // Note: replace .#ctor(params) to .constructor
             }
             else if (title.endsWith(" method")) {
                 continue; // TODO
                 // Proposal: insert FunctionTypeNotation, and later check same key exists and append more signatures
-            }
-            else if (title.endsWith(" methods")) {
-                continue; // TODO: how should multiple method signatures be processed?
             }
             else if (title.endsWith(" enumeration")) {
                 continue; // TODO
@@ -126,11 +193,14 @@ async function generateMapFile() {
                 continue; // TODO
                 // Just parse the description
             }
+            else if (title.endsWith(" delegate") || title.endsWith(" delegates")) {
+                continue; // TODO: eventargs
+            }
             else if (title.endsWith(" structure") || title.endsWith(" interface")) {
                 continue; // Is there any JS-targeted document?
             }
-            else if (title.endsWith(" delegate") || title.endsWith(" delegates")) {
-                continue; // Do not parse non-JS things
+            else if (title.endsWith(" constructors") || title.endsWith(" methods")) {
+                continue; // Do not parse meta pages
             }
             else {
                 debugger;
@@ -141,7 +211,7 @@ async function generateMapFile() {
         return referenceMap;
 
 
-        function parsePropertyTypeNotation(notationElement: HTMLParagraphElement): string | Map<string, string> {
+        function parseTypeNotation(notationElement: HTMLParagraphElement): string | Map<string, string> {
             /*
             Expect "Type:"
             If sliced text still have non-whitespace text:
@@ -220,6 +290,18 @@ async function generateMapFile() {
                 return typeMap;
             }
         }
+
+        function inline(text: string) {
+            return text.trim().replace(whitespaceRepeatRegex, " ");
+        }
+    }
+
+    function objectify(map: Map<string, TypeNotation>) {
+        let ob: any = {};
+        for (let entry of map.entries()) {
+            ob[entry[0]] = entry[1];
+        }
+        return ob;
     }
 }
 
