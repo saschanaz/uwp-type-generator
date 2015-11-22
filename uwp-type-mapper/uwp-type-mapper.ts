@@ -15,13 +15,19 @@ interface FunctionTypeNotation {
 }
 interface FunctionSignature {
     description: string;
-    parameters: FunctionParameter[]; 
+    parameters: FunctionParameter[];
     return: "instance" | TypeNotation;
 }
 interface FunctionParameter {
     description: string;
     type: string;
     key: string;
+}
+
+interface EventTypeNotation {
+    description: string;
+    type: "event";
+    delegate: string;
 }
 
 generateMapFile();
@@ -45,7 +51,10 @@ async function generateMapFile() {
         let referencepath = "referencedocs";
         let mshelppath = "ms-xhelp:///?Id=T%3a";
         let bracketRegex = /\[[^\[]*\]/;
+        let parenthesisRegex = /\([^\(]*\)/;
         let whitespaceRepeatRegex = /\s{1,}/g;
+        let eventListenerRegex = /\w+\.addEventListener\(\"(\w+)\"\, \w+\)/;
+        let oneventRegex = /\w+\.on(\w+) =/;
         let files = await fsReadFiles(referencepath);
         let skippedById: string[] = [];
 
@@ -84,6 +93,18 @@ async function generateMapFile() {
                 referenceMap.set(helpId, {
                     description,
                     type: "class"
+                } as TypeNotation);
+            }
+            else if (title.endsWith(" enumeration")) {
+                referenceMap.set(helpId, {
+                    description,
+                    type: "enumeration"
+                } as TypeNotation);
+            }
+            else if (title.endsWith(" namespace")) {
+                referenceMap.set(helpId, {
+                    description,
+                    type: "namespace"
                 } as TypeNotation);
             }
             else if (title.endsWith(" property")) {
@@ -134,7 +155,7 @@ async function generateMapFile() {
                     // JS incompatible
                     continue;
                 }
-                
+
                 let notation = referenceMap.get(helpId) as FunctionTypeNotation || {
                     description: "", // 
                     type: "function",
@@ -152,7 +173,10 @@ async function generateMapFile() {
                     return: undefined
                 } as FunctionSignature;
 
-                // TODO: remove call syntax from helpId so that signature can correctly be appended
+                let parentheses = parenthesisRegex.exec(helpId);
+                if (parentheses) {
+                    helpId = helpId.slice(0, parentheses.index);
+                } // may exist when with params, may not when without
 
                 let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Parameters"))[0];
                 let parameterListElement = before.nextElementSibling as HTMLDListElement;
@@ -189,20 +213,50 @@ async function generateMapFile() {
                 referenceMap.set(helpId, notation);
                 // Proposal: insert FunctionTypeNotation, and later check same key exists and append more signatures
             }
-            else if (title.endsWith(" enumeration")) {
-                continue; // TODO
-            }
             else if (title.endsWith(" event")) {
-                continue; // TODO
-                // Note: Remember both addEventListener and `onevent`
-                // How can their existence be checked?
-            }
-            else if (title.endsWith(" namespace")) {
-                continue; // TODO
-                // Just parse the description
+                // Example URL: https://msdn.microsoft.com/en-us/library/windows/apps/windows.media.capture.core.variablephotosequencecapture.photocaptured.aspx
+
+                let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Syntax"))[0];
+                let codesnippetElement = before.nextElementSibling;
+                let codesnippetText: string;
+                while (codesnippetElement.tagName === "CODESNIPPET") {
+                    if (codesnippetElement.getAttribute("language") === "JavaScript") {
+                        codesnippetText = codesnippetElement.textContent;
+                        break;
+                    }
+                    codesnippetElement = codesnippetElement.nextElementSibling;
+                }
+
+                if (!codesnippetText) {
+                    // JS incompatible
+                    continue;
+                }
+
+                let eventListener = codesnippetText.match(eventListenerRegex);
+                let onevent = codesnippetText.match(oneventRegex);
+
+                before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Event information"))[0];
+                let table = before.nextElementSibling as HTMLTableElement;
+                let rows = Array.from(table.rows) as HTMLTableRowElement[];
+                if (rows.length > 1) {
+                    debugger;
+                    throw new Error("Unexpected multiple table rows");
+                }
+                let header = rows[0].children[0];
+                let typeNotationElement = rows[0].children[1];
+
+                if (!eventListener || !onevent) {
+                    debugger;
+                    throw new Error("Expected both event listener/onevent syntax but not found");
+                }
+                referenceMap.set(helpId, {
+                    description,
+                    type: "event",
+                    delegate: typeNotationElement.textContent.trim()
+                } as EventTypeNotation);
             }
             else if (title.endsWith(" delegate") || title.endsWith(" delegates")) {
-                // example URL: https://msdn.microsoft.com/en-us/library/windows/apps/br206577.aspx
+                // example URL: https://msdn.microsoft.com/en-us/library/windows/apps/br206577.aspx, https://msdn.microsoft.com/en-us/library/windows/apps/br225997.aspx
                 continue; // TODO: eventargs
             }
             else if (title.endsWith(" structure") || title.endsWith(" interface")) {
@@ -274,15 +328,6 @@ async function generateMapFile() {
                     Try parsing it as language indicator
                 Else:
                     Break, assuming there is no more type description
-
-
-            Define Parsing as language indicator: 
-                Slice(1, -1)
-                If indexof '/' exists:
-                    Split the string by '/'
-                    Return result array
-                Else
-                    Return [text]
             */
             let typeMap = new Map<string, string>();
 
@@ -377,7 +422,8 @@ async function generateMapFile() {
 
     function objectify(map: Map<string, TypeNotation>) {
         let ob: any = {};
-        for (let entry of map.entries()) {
+        let sortedEntries = Array.from(map.entries()).sort((entry) => entry);
+        for (let entry of sortedEntries) {
             ob[entry[0]] = entry[1];
         }
         return ob;
