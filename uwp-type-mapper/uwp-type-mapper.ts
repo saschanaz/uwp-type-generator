@@ -48,7 +48,7 @@ async function generateMapFile() {
     async function parse() {
         let referenceMap = new Map<string, TypeNotation>();
 
-        let referencepath = "referencedocs";
+        let referencepath = "../referencedocs";
         let mshelppath = "ms-xhelp:///?Id=T%3a";
         let bracketRegex = /\[[^\[]*\]/;
         let parenthesisRegex = /\([^\(]*\)/;
@@ -244,6 +244,11 @@ async function generateMapFile() {
                 }
                 let header = rows[0].children[0];
                 let typeNotationElement = rows[0].children[1];
+                let delegate = exportJavaScriptTypeNotation(parseTypeNotation(typeNotationElement as HTMLTableColElement, true))
+                if (!delegate) {
+                    // JS compatibility is already checked above
+                    throw new Error("Expected JS type but not found");
+                }
 
                 if (!eventListener || !onevent) {
                     debugger;
@@ -252,7 +257,7 @@ async function generateMapFile() {
                 referenceMap.set(helpId, {
                     description,
                     type: "event",
-                    delegate: typeNotationElement.textContent.trim()
+                    delegate
                 } as EventTypeNotation);
             }
             else if (title.endsWith(" delegate") || title.endsWith(" delegates")) {
@@ -309,7 +314,7 @@ async function generateMapFile() {
             return parameters;
         }
 
-        function parseTypeNotation(notationElement: HTMLParagraphElement): string | Map<string, string> {
+        function parseTypeNotation(notationElement: HTMLElement, omitTypeIndication?: boolean): string | Map<string, string> {
             /*
             Expect "Type:"
             If sliced text still have non-whitespace text:
@@ -332,30 +337,32 @@ async function generateMapFile() {
             let typeMap = new Map<string, string>();
 
             let node = notationElement.firstChild;
-            if (isText(node) && node.textContent.indexOf("Type:") === 0) {
-                let sliced = node.textContent.slice(5).trim();
-                if (sliced.length > 0) {
-                    let brackets = bracketRegex.exec(sliced);
-                    if (brackets) {
-                        let parsedLanguages = parseLanguageIndicator(sliced.substr(brackets.index, brackets[0].length))
-                        // language name, type name
-                        for (let language of parsedLanguages) {
-                            typeMap.set(language, sliced.slice(0, brackets.index));
+
+            if (!omitTypeIndication) {
+                if (isText(node) && node.textContent.indexOf("Type:") === 0) {
+                    let parsed = parseTypeNotationString(node.textContent.slice(5));
+                    if (parsed.type) {
+                        if (parsed.languages) {
+                            for (let language of parsed.languages) {
+                                typeMap.set(language, parsed.type);
+                            }
+                        }
+                        else {
+                            return parsed.type
                         }
                     }
-                    else {
-                        return sliced;
-                    }
                 }
+                else {
+                    debugger;
+                    throw new Error("Incorrect type description");
+                }
+                node = node.nextSibling;
             }
-            else {
-                debugger;
-                throw new Error("Incorrect type description");
-            }
+
+            // https://msdn.microsoft.com/en-us/library/windows/apps/windows.system.memorymanager.appmemoryusagelimitchanging.aspx
+            // TODO: use text node parser also in below code
 
             let proposedTypeName: string;
-
-            node = node.nextSibling;
             let trimmedTextContent: string;
             while (node) {
                 trimmedTextContent = node.textContent.trim();
@@ -373,16 +380,14 @@ async function generateMapFile() {
                     }
                 }
                 else if (isText(node) && trimmedTextContent.length > 0) {
-                    let brackets = bracketRegex.exec(trimmedTextContent);
-                    if (brackets) {
-                        let parsedLanguages = parseLanguageIndicator(trimmedTextContent.substr(brackets.index, brackets[0].length))
-                        for (let language of parsedLanguages) {
+                    let parsed = parseTypeNotationString(node.textContent);
+                    if (parsed.type) {
+                        proposedTypeName = parsed.type;
+                    }
+                    if (parsed.languages) {
+                        for (let language of parsed.languages) {
                             typeMap.set(language, proposedTypeName);
                         }
-                    }
-                    else {
-                        debugger;
-                        throw new Error("Expected a bracket but not found");
                     }
                 }
                 node = node.nextSibling;
@@ -393,16 +398,42 @@ async function generateMapFile() {
             else {
                 return typeMap;
             }
-        }
-
-        function parseLanguageIndicator(text: string) {
-            /* Expect potential slash-separated input */
-            text = text.slice(1, -1);
-            if (text.indexOf('/') !== -1) {
-                return text.split('/');
+            
+            interface TypeForLanguage {
+                type?: string;
+                languages?: string[];
             }
-            else {
-                return [text];
+            function parseTypeNotationString(text: string) {
+                /*
+                "typeName [languageName]" -> { type: typeName, languages: [languageName] }
+                "[languageName]" -> { languages: [languageName] }
+                */
+                text = text.trim();
+                if (text.length > 0) {
+                    let brackets = bracketRegex.exec(text);
+                    if (brackets) {
+                        let languages = parseLanguageIndicator(text.substr(brackets.index, brackets[0].length))
+                        // language name, type name
+                        return { type: text.slice(0, brackets.index).trim(), languages } as TypeForLanguage
+                    }
+                    else {
+                        return { type: text } as TypeForLanguage;
+                    }
+                }
+                else {
+                    return {} as TypeForLanguage;
+                }
+            }
+
+            function parseLanguageIndicator(text: string) {
+                /* Expect potential slash-separated input */
+                text = text.slice(1, -1);
+                if (text.indexOf('/') !== -1) {
+                    return text.split('/');
+                }
+                else {
+                    return [text];
+                }
             }
         }
 
@@ -422,7 +453,7 @@ async function generateMapFile() {
 
     function objectify(map: Map<string, TypeNotation>) {
         let ob: any = {};
-        let sortedEntries = Array.from(map.entries()).sort((entry) => entry);
+        let sortedEntries = Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
         for (let entry of sortedEntries) {
             ob[entry[0]] = entry[1];
         }
