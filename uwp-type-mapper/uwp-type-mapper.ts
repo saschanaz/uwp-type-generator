@@ -13,6 +13,11 @@ interface FunctionTypeNotation {
     type: "function";
     signatures: FunctionSignature[];
 }
+interface DelegateTypeNotation {
+    description: "";
+    type: "delegate";
+    signature: FunctionSignature;
+}
 interface FunctionSignature {
     description: string;
     parameters: FunctionParameter[];
@@ -65,6 +70,7 @@ async function generateMapFile() {
             if (!metaHelpId)
                 continue;
             let helpId = metaHelpId.content.toLowerCase();
+            let categoryJs = Array.from(doc.head.querySelectorAll("meta[name=Microsoft\\.Help\\.Category]")).filter((meta: HTMLMetaElement) => meta.content === "DevLang:javascript")[0];
             let startIndex = helpId.indexOf(":windows");
             if (startIndex !== -1) {
                 helpId = helpId.slice(startIndex + 1);
@@ -112,7 +118,7 @@ async function generateMapFile() {
                 
                 let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Property value"))[0];
                 let typeNotationParagraph = before.nextElementSibling;
-                let type = exportJavaScriptTypeNotation(parseTypeNotation(typeNotationParagraph as HTMLParagraphElement));
+                let type = exportJavaScriptTypeNotation(parseTypeNotationElement(typeNotationParagraph as HTMLParagraphElement));
                 if (!type) {
                     // JS incompatble
                     continue;
@@ -122,6 +128,29 @@ async function generateMapFile() {
                     description,
                     type
                 } as TypeNotation);
+            }
+            else if (title.endsWith(" delegate")) {
+                // example URL: https://msdn.microsoft.com/en-us/library/windows/apps/br206577.aspx, https://msdn.microsoft.com/en-us/library/windows/apps/br225997.aspx
+
+                let signature = {
+                    description: "",
+                    parameters: undefined,
+                    return: undefined
+                } as FunctionSignature;
+                
+                let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Parameters"))[0];
+                let parameterListElement = before.nextElementSibling as HTMLDListElement;
+                signature.parameters = parseParameterList(parameterListElement);
+                if (!signature.parameters) {
+                    // JS incompatible
+                    continue;
+                }
+
+                referenceMap.set(helpId, {
+                    description,
+                    type: "delegate",
+                    signature
+                } as DelegateTypeNotation);
             }
             else if (title.endsWith(" constructor")) {
                 // example URL
@@ -191,7 +220,7 @@ async function generateMapFile() {
                     let typeNotationElement = before.nextElementSibling as HTMLParagraphElement;
                     let typeDescriptionElement = typeNotationElement.nextElementSibling;
 
-                    let type = exportJavaScriptTypeNotation(parseTypeNotation(typeNotationElement));
+                    let type = exportJavaScriptTypeNotation(parseTypeNotationElement(typeNotationElement));
                     if (!type) {
                         // JS incompatible
                         continue;
@@ -199,7 +228,7 @@ async function generateMapFile() {
 
                     signature.return = {
                         description: inline(typeDescriptionElement.textContent),
-                        type: parseTypeNotation(typeNotationElement)
+                        type: parseTypeNotationElement(typeNotationElement)
                     } as TypeNotation;
                 }
 
@@ -244,7 +273,7 @@ async function generateMapFile() {
                 }
                 let header = rows[0].children[0];
                 let typeNotationElement = rows[0].children[1];
-                let delegate = exportJavaScriptTypeNotation(parseTypeNotation(typeNotationElement as HTMLTableColElement, true))
+                let delegate = exportJavaScriptTypeNotation(parseTypeNotationElement(typeNotationElement as HTMLTableColElement, true))
                 if (!delegate) {
                     // JS compatibility is already checked above
                     throw new Error("Expected JS type but not found");
@@ -260,12 +289,13 @@ async function generateMapFile() {
                     delegate
                 } as EventTypeNotation);
             }
-            else if (title.endsWith(" delegate") || title.endsWith(" delegates")) {
-                // example URL: https://msdn.microsoft.com/en-us/library/windows/apps/br206577.aspx, https://msdn.microsoft.com/en-us/library/windows/apps/br225997.aspx
-                continue; // TODO: eventargs
-            }
             else if (title.endsWith(" structure") || title.endsWith(" interface")) {
-                continue; // Is there any JS-targeted document?
+                if (categoryJs) {
+                    continue; // Is there any JS-targeted document? 
+                }
+                else {
+                    continue;
+                }
             }
             else if (title.endsWith(" constructors") || title.endsWith(" methods")) {
                 continue; // Do not parse meta pages
@@ -289,7 +319,7 @@ async function generateMapFile() {
                     parameterName = child.textContent.trim();
                 }
                 else if (child.tagName === "DD") {
-                    let parameterType = exportJavaScriptTypeNotation(parseTypeNotation(child.children[0] as HTMLParagraphElement));
+                    let parameterType = exportJavaScriptTypeNotation(parseTypeNotationElement(child.children[0] as HTMLParagraphElement));
                     if (!parameterType) {
                         // No JS type
                         return;
@@ -314,7 +344,7 @@ async function generateMapFile() {
             return parameters;
         }
 
-        function parseTypeNotation(notationElement: HTMLElement, omitTypeIndication?: boolean): string | Map<string, string> {
+        function parseTypeNotationElement(notationElement: HTMLElement, omitTypeIndication?: boolean): string | Map<string, string> {
             /*
             Expect "Type:"
             If sliced text still have non-whitespace text:
