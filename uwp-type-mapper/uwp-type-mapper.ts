@@ -7,6 +7,11 @@ FunctionSignature,
 DelegateTypeNotation,
 EventTypeNotation
 } from "./uwp-type-parser";
+import {
+ClassDescription,
+TypeDescription,
+TypeNameOrDescription
+} from "../uwp-type-iterator/sources/generator";
 import * as fspromise from "./fspromise"
 
 main();
@@ -25,7 +30,14 @@ async function main() {
 
 async function map(iteration: any, docs: any) {
     for (let itemName in iteration) {
-        
+        let item = iteration[itemName] as TypeNameOrDescription;
+        if (typeof item === "string") {
+
+        }
+        else {
+            let doc = docs[item.__fullname.toLowerCase()];
+            doc;
+        }
     }
 }
 

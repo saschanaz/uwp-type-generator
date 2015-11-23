@@ -2,10 +2,10 @@
 
 
 
-interface TypeDescription { __type: "class" | "structure"; __fullname: string; };
-type TypeNameOrDescription = string | TypeDescription;
+export interface TypeDescription { __type: "class" | "structure"; __fullname: string; };
+export type TypeNameOrDescription = string | TypeDescription;
 
-interface ClassDescription { __type: "class"; __fullname: string; __extends: TypeDescription; prototype: TypeDescription; }
+export interface ClassDescription { __type: "class"; __fullname: string; __extends: TypeDescription; prototype: TypeDescription; }
 
 async function generate() {
     try {
