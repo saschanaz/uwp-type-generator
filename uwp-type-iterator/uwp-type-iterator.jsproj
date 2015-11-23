@@ -44,9 +44,11 @@
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <TypeScriptNoImplicitAny>true</TypeScriptNoImplicitAny>
-    <TypeScriptOutFile>js/app.js</TypeScriptOutFile>
+    <TypeScriptOutFile>
+    </TypeScriptOutFile>
     <TypeScriptTarget>ES6</TypeScriptTarget>
     <TypeScriptSuppressImplicitAnyIndexErrors>true</TypeScriptSuppressImplicitAnyIndexErrors>
+    <TypeScriptOutDir>js/</TypeScriptOutDir>
   </PropertyGroup>
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup Condition="'$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0'">
@@ -61,7 +63,7 @@
     <TargetPlatformMinVersion>10.0.10240.0</TargetPlatformMinVersion>
     <MinimumVisualStudioVersion>$(VersionNumberMajor).$(VersionNumberMinor)</MinimumVisualStudioVersion>
     <DefaultLanguage>en-US</DefaultLanguage>
-    <PackageCertificateKeyFile>uwp.ts Generator_TemporaryKey.pfx</PackageCertificateKeyFile>
+    <PackageCertificateKeyFile>uwp-type-iterator_TemporaryKey.pfx</PackageCertificateKeyFile>
   </PropertyGroup>
   <ItemGroup>
     <AppxManifest Include="package.appxmanifest">
@@ -83,9 +85,9 @@
     <Content Include="WinJS\js\en-US\ui.strings.js" />
     <Content Include="WinJS\js\base.js" />
     <Content Include="WinJS\js\ui.js" />
-    <None Include="uwp-type-generator_TemporaryKey.pfx" />
+    <None Include="uwp-type-iterator_TemporaryKey.pfx" />
     <TypeScriptCompile Include="declarations\winrt.d.ts" />
-    <TypeScriptCompile Include="sources\generator.ts" />
+    <TypeScriptCompile Include="iterator.ts" />
   </ItemGroup>
   <ItemGroup>
     <Service Include="{4a0dddb5-7a95-4fbf-97cc-616d07737a77}" />

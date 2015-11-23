@@ -1,6 +1,6 @@
-﻿declare var log: HTMLDivElement;
+﻿/// <reference path="declarations/winrt.d.ts" />
 
-
+declare var log: HTMLDivElement;
 
 export interface TypeDescription { __type: "class" | "structure"; __fullname: string; };
 export type TypeNameOrDescription = string | TypeDescription;
@@ -21,10 +21,12 @@ async function generate() {
         } as TypeDescription;
 
         let properties = new Set(Object.getOwnPropertyNames(namespace));
-        properties.delete("length");
-        properties.delete("name");
-        properties.delete("caller");
-        properties.delete("arguments");
+        if (namespace instanceof Function) {
+            properties.delete("length");
+            properties.delete("name");
+            properties.delete("caller");
+            properties.delete("arguments");
+        }
         properties.delete("toString");
         properties.delete("constructor"); // should be added by mapper
 
