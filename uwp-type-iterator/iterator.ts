@@ -2,7 +2,7 @@
 
 declare var log: HTMLDivElement;
 
-export interface TypeDescription { __type: "class" | "structure"; __fullname: string; __description?: string;[key: string]: TypeNameOrDescription };
+export interface TypeDescription { __type: string; __fullname: string; __description?: string;[key: string]: TypeNameOrDescription };
 export type TypeNameOrDescription = string | TypeDescription;
 
 export interface ClassDescription extends TypeDescription { __type: "class"; __extends: TypeDescription; prototype: TypeDescription; }
