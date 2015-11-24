@@ -101,6 +101,9 @@ async function parseAsMap() {
                 } as TypeNotation);
             }
             else if (title.endsWith(" enumeration")) {
+                /*
+                TODO: parse member descriptions
+                */
                 referenceMap.set(helpId, {
                     description,
                     type: "enumeration"

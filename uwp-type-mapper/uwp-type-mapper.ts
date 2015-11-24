@@ -18,17 +18,31 @@ import * as fspromise from "./fspromise"
 
 main().catch((err) => console.error(err));
 
+
+export interface FunctionDescription extends TypeDescription { __type: "function" | "callback"; __signatures: FunctionSignature[]; }
+
+
 async function main() {
     let args = parseArgs();
     if (!args["-i"]) {
         throw new Error("Input iteration file path is not specified.");
     }
+    if (!args["-o"]) {
+        throw new Error("Output file path is not specified.");
+    }
 
+    console.log("Loading documentations...");
     let docs = await loadDocs("--force-reparse" in args)
+    console.log("Loading iteration file...");
     let iterations = JSON.parse(await fspromise.readFile(args["-i"]));
 
+    console.log("Mapping...");
     map(iterations, docs);
 
+    console.log("Storing result file...");
+    await fspromise.writeFile(args["-o"], JSON.stringify(iterations, null, 2));
+
+    console.log("Finished.");
     process.exit();
 }
 
@@ -40,10 +54,15 @@ function map(iteration: TypeDescription, docs: any) {
 
         let item = iteration[itemName] as TypeNameOrDescription;
         if (typeof item === "string") {
-            let fullName = `${iteration.__fullname}.${itemName}`.toLowerCase();
             if (item !== "unknown") {
                 continue;
+                // TODO: add descriptions!
             }
+            if ((itemName as string).startsWith("on")) {
+                itemName = (itemName as string).slice(2);
+            }
+
+            let fullName = `${iteration.__fullname}.${itemName}`.toLowerCase();
 
             let doc = docs[fullName] as TypeNotation;
             if (!doc) {
@@ -62,9 +81,26 @@ function map(iteration: TypeDescription, docs: any) {
                 case "function":
                     /*
                     TODO: interfaces from parser and iterator are too different, should be integrated
+                    TypeDescription does not have members for function signatures
                     */
+                    iteration[itemName] = {
+                        __fullname: fullName,
+                        __type: "function",
+                        __description: doc.description,
+                        __signatures: (doc as FunctionTypeNotation).signatures
+                    } as FunctionDescription;
                     break;
                 case "event":
+                    /*
+                    TODO: methods and onevents must be distingushable (by __type?)
+                    Do FunctionDescription have to allow "function"|"?" <- What name? callback?
+                     */
+                    iteration[`on${itemName}`] = {
+                        __fullname: fullName,
+                        __type: "callback",
+                        __description: doc.description,
+                        __signatures: (doc as FunctionTypeNotation).signatures
+                    } as FunctionDescription;
                     break;
                 default: {
                     iteration[itemName] = {
@@ -76,12 +112,38 @@ function map(iteration: TypeDescription, docs: any) {
                 }
             }
         }
-        else if (item.__type === "structure") {
-            map(item, docs);
+        else {
+            let fullName = item.__fullname.toLowerCase();
+            let doc = docs[fullName] as TypeNotation;
+            if (doc) {
+                item.__description = doc.description;
+            }
+
+            if (item.__type === "structure") {
+
+                map(item, docs);
+            }
+            else if (item.__type === "class") {
+                map(item, docs);
+
+                if (hasEventCallback((item as ClassDescription).prototype)) {
+                    (item as ClassDescription).__eventTarget = true;
+                }
+            }
         }
-        else if (item.__type === "class") {
-            map(item, docs);
+    }
+
+    function hasEventCallback(iteration: TypeDescription) {
+        for (let itemName in iteration) {
+            if ((itemName as string).startsWith("__")) {
+                continue;
+            }
+            let item = iteration[itemName] as TypeNameOrDescription;
+            if ((item as TypeDescription).__type === "callback") {
+                return true;
+            }
         }
+        return false;
     }
 }
 
@@ -114,7 +176,7 @@ function parseArgs() {
             result[arg] = undefined;
             proposedArgName = undefined;
         }
-        else if (arg === "-i") {
+        else if (arg === "-i" || arg === "-o") {
             proposedArgName = arg;
             result[arg] = undefined;
         }
