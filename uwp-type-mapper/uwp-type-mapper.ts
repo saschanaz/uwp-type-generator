@@ -1,4 +1,6 @@
-﻿import parse from "./uwp-type-parser"
+﻿"use strict";
+
+import parse from "./uwp-type-parser"
 import {
 TypeNotation,
 FunctionTypeNotation,
@@ -11,10 +13,10 @@ import {
 ClassDescription,
 TypeDescription,
 TypeNameOrDescription
-} from "../uwp-type-iterator/sources/generator";
+} from "../uwp-type-iterator/iterator";
 import * as fspromise from "./fspromise"
 
-main();
+main().catch((err) => console.error(err));
 
 async function main() {
     let args = parseArgs();
@@ -22,13 +24,13 @@ async function main() {
         throw new Error("Input iteration file path is not specified.");
     }
 
-    let docs = await loadDocs(args["--force-reparse"])
-    let iteration = await fspromise.readFile(args["-i"]);
+    let docs = await loadDocs("--force-reparse" in args)
+    //let iteration = await fspromise.readFile(args["-i"]);
 
-    
+    process.exit();
 }
 
-async function map(iteration: any, docs: any) {
+async function map(iteration: TypeDescription, docs: any) {
     for (let itemName in iteration) {
         let item = iteration[itemName] as TypeNameOrDescription;
         if (typeof item === "string") {
@@ -59,22 +61,13 @@ async function loadDocs(forceReparse?: boolean) {
     }
     await fspromise.writeFile("built/typemap.json", JSON.stringify(result, null, 2));
     return result;
-
-    function objectify(map: Map<string, TypeNotation>) {
-        let ob: any = {};
-        let sortedEntries = Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-        for (let entry of sortedEntries) {
-            ob[entry[0]] = entry[1];
-        }
-        return ob;
-    }
 }
 
 
 function parseArgs() {
     let result: any = {};
     let proposedArgName: string;
-    for (let arg of process.argv) {
+    for (let arg of process.argv.slice(2)) {
         if (arg === "--force-reparse") {
             result[arg] = undefined;
             proposedArgName = undefined;

@@ -2,10 +2,10 @@
 
 declare var log: HTMLDivElement;
 
-export interface TypeDescription { __type: "class" | "structure"; __fullname: string; };
+export interface TypeDescription { __type: "class" | "structure"; __fullname: string; __description?: string;[key: string]: TypeNameOrDescription };
 export type TypeNameOrDescription = string | TypeDescription;
 
-export interface ClassDescription { __type: "class"; __fullname: string; __extends: TypeDescription; prototype: TypeDescription; }
+export interface ClassDescription extends TypeDescription { __type: "class"; __extends: TypeDescription; prototype: TypeDescription; }
 
 async function generate() {
     try {
@@ -30,7 +30,7 @@ async function generate() {
         properties.delete("toString");
         properties.delete("constructor"); // should be added by mapper
 
-        for (let itemName in namespace) {
+        for (let itemName of properties) {
             let item: any;
             try {
                 item = namespace[itemName];
@@ -98,7 +98,7 @@ async function generate() {
         }
         return description;
     }
-    
+
     async function write(text: string) {
         let p = document.createElement("p");
         p.textContent = text;
@@ -115,6 +115,8 @@ async function save(result: string) {
     picker.fileTypeChoices.insert("JSON format", [".json"] as any);
     let file = await picker.pickSaveFileAsync();
     let writeStream = await file.openAsync(Windows.Storage.FileAccessMode.readWrite);
+    writeStream.size = 0;
+
     let datawriter = new Windows.Storage.Streams.DataWriter(writeStream);
     datawriter.writeString(JSON.stringify(result, null, 2));
     await datawriter.storeAsync();

@@ -62,245 +62,253 @@ async function parseAsMap() {
     let skippedById: string[] = [];
 
     for (let filepath of files) {
-        let text = await fspromise.readFile(`${referencepath}/${filepath}`);
-        let doc = jsdom.jsdom(text) as Document;
-        let metaHelpId = doc.head.querySelector("meta[name=Microsoft\\.Help\\.Id]") as HTMLMetaElement;
-        if (!metaHelpId)
-            continue;
-        let helpId = metaHelpId.content.toLowerCase();
-        let categoryJs = Array.from(doc.head.querySelectorAll("meta[name=Microsoft\\.Help\\.Category]")).filter((meta: HTMLMetaElement) => meta.content === "DevLang:javascript")[0];
-        let startIndex = helpId.indexOf(":windows");
-        if (startIndex !== -1) {
-            helpId = helpId.slice(startIndex + 1);
-        }
-        else {
-            let metaF1 = doc.head.querySelector("meta[name$=F1]") as HTMLMetaElement;
-            if (metaF1) {
-                skippedById.push(metaF1.content);
+        try {
+            let text = await fspromise.readFile(`${referencepath}/${filepath}`);
+            let doc = jsdom.jsdom(text) as Document;
+            let metaHelpId = doc.head.querySelector("meta[name=Microsoft\\.Help\\.Id]") as HTMLMetaElement;
+            if (!metaHelpId)
+                continue;
+            let helpId = metaHelpId.content.toLowerCase();
+            let categoryJs = Array.from(doc.head.querySelectorAll("meta[name=Microsoft\\.Help\\.Category]")).filter((meta: HTMLMetaElement) => meta.content === "DevLang:javascript")[0];
+            let startIndex = helpId.indexOf(":windows");
+            if (startIndex !== -1) {
+                helpId = helpId.slice(startIndex + 1);
             }
             else {
-                skippedById.push(doc.title);
+                let metaF1 = doc.head.querySelector("meta[name$=F1]") as HTMLMetaElement;
+                if (metaF1) {
+                    skippedById.push(metaF1.content);
+                }
+                else {
+                    skippedById.push(doc.title);
+                }
+                continue;
             }
-            continue;
-        }
-        if (helpId.startsWith("windows.ui.xaml")) {
-            continue; // Do not parse XAML API
-        }
-        // TODO: use target language meta tag? it can only be used with VS document
-        let mainSection = doc.body.querySelector("div#mainSection");
-        let mainContent = mainSection.textContent
-        let description = inline(mainContent.slice(0, mainContent.search(/\sSyntax\s/)))
-        let title = doc.body.querySelector("div.title").textContent.trim();
-        if (title.endsWith(" class")) {
-            // https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.background.smartcardtrigger.aspx
+            if (helpId.startsWith("windows.ui.xaml")) {
+                continue; // Do not parse XAML API
+            }
+            // TODO: use target language meta tag? it can only be used with VS document
+            let mainSection = doc.body.querySelector("div#mainSection");
+            let mainContent = mainSection.textContent
+            let description = inline(mainContent.slice(0, mainContent.search(/\sSyntax\s/)))
+            let title = doc.body.querySelector("div.title").textContent.trim();
+            if (title.endsWith(" class") || title.endsWith(" attribute")) {
+                // https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.background.smartcardtrigger.aspx
 
-            referenceMap.set(helpId, {
-                description,
-                type: "class"
-            } as TypeNotation);
-        }
-        else if (title.endsWith(" enumeration")) {
-            referenceMap.set(helpId, {
-                description,
-                type: "enumeration"
-            } as TypeNotation);
-        }
-        else if (title.endsWith(" namespace")) {
-            referenceMap.set(helpId, {
-                description,
-                type: "namespace"
-            } as TypeNotation);
-        }
-        else if (title.endsWith(" property")) {
-            // example URL: https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.background.smartcardtrigger.triggertype.aspx
+                referenceMap.set(helpId, {
+                    description,
+                    type: "class"
+                } as TypeNotation);
+            }
+            else if (title.endsWith(" enumeration")) {
+                referenceMap.set(helpId, {
+                    description,
+                    type: "enumeration"
+                } as TypeNotation);
+            }
+            else if (title.endsWith(" namespace")) {
+                referenceMap.set(helpId, {
+                    description,
+                    type: "namespace"
+                } as TypeNotation);
+            }
+            else if (title.endsWith(" property")) {
+                // example URL: https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.background.smartcardtrigger.triggertype.aspx
                 
-            let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Property value"))[0];
-            let typeNotationParagraph = before.nextElementSibling;
-            let type = exportJavaScriptTypeNotation(parseTypeNotationElement(typeNotationParagraph as HTMLParagraphElement));
-            if (!type) {
-                // JS incompatble
-                continue;
-            }
-
-            referenceMap.set(helpId, {
-                description,
-                type
-            } as TypeNotation);
-        }
-        else if (title.endsWith(" delegate")) {
-            // example URL: https://msdn.microsoft.com/en-us/library/windows/apps/br206577.aspx, https://msdn.microsoft.com/en-us/library/windows/apps/br225997.aspx
-
-            let signature = {
-                description: "",
-                parameters: undefined,
-                return: undefined
-            } as FunctionSignature;
-
-            let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Parameters"))[0];
-            let parameterListElement = before.nextElementSibling as HTMLDListElement;
-            signature.parameters = parseParameterList(parameterListElement);
-            if (!signature.parameters) {
-                // JS incompatible
-                continue;
-            }
-
-            referenceMap.set(helpId, {
-                description,
-                type: "delegate",
-                signature
-            } as DelegateTypeNotation);
-        }
-        else if (title.endsWith(" constructor")) {
-            // example URL
-            // no parameter:
-            // https://msdn.microsoft.com/en-us/library/windows/apps/dn858104.aspx
-            // one parameter:
-            // https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.background.smartcardtrigger.smartcardtrigger.aspx
-            // multiple parameters:
-            // https://msdn.microsoft.com/en-us/library/windows/apps/dn631282.aspx
-
-                
-            let ctorIndex = helpId.indexOf(".#ctor");
-            if (ctorIndex !== -1) {
-                helpId = `${helpId.slice(0, ctorIndex)}.constructor`;
-            }
-            else {
-                debugger;
-                throw new Error("Expected .ctor but not found");
-            }
-
-            let signature = {
-                description,
-                parameters: undefined,
-                return: "instance"
-            } as FunctionSignature;
-
-            let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Parameters"))[0];
-            let parameterListElement = before.nextElementSibling as HTMLDListElement;
-            signature.parameters = parseParameterList(parameterListElement);
-            if (!signature.parameters) {
-                // JS incompatible
-                continue;
-            }
-
-            let notation = referenceMap.get(helpId) as FunctionTypeNotation || {
-                description: "", // 
-                type: "function",
-                signatures: []
-            } as FunctionTypeNotation;
-            notation.signatures.push(signature);
-
-            referenceMap.set(helpId, notation);
-            // Note: replace .#ctor(params) to .constructor
-        }
-        else if (title.endsWith(" method")) {
-            let signature = {
-                description,
-                parameters: undefined,
-                return: undefined
-            } as FunctionSignature;
-
-            let parentheses = parenthesisRegex.exec(helpId);
-            if (parentheses) {
-                helpId = helpId.slice(0, parentheses.index);
-            } // may exist when with params, may not when without
-
-            let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Parameters"))[0];
-            let parameterListElement = before.nextElementSibling as HTMLDListElement;
-            signature.parameters = parseParameterList(parameterListElement);
-            if (!signature.parameters) {
-                // JS incompatible
-                continue;
-            }
-
-            before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Return value"))[0];
-            if (before) {
-                let typeNotationElement = before.nextElementSibling as HTMLParagraphElement;
-                let typeDescriptionElement = typeNotationElement.nextElementSibling;
-
-                let type = exportJavaScriptTypeNotation(parseTypeNotationElement(typeNotationElement));
+                let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Property value"))[0];
+                let typeNotationParagraph = before.nextElementSibling;
+                let type = exportJavaScriptTypeNotation(parseTypeNotationElement(typeNotationParagraph as HTMLParagraphElement));
                 if (!type) {
+                    // JS incompatble
+                    continue;
+                }
+
+                referenceMap.set(helpId, {
+                    description,
+                    type
+                } as TypeNotation);
+            }
+            else if (title.endsWith(" delegate")) {
+                // example URL: https://msdn.microsoft.com/en-us/library/windows/apps/br206577.aspx, https://msdn.microsoft.com/en-us/library/windows/apps/br225997.aspx
+
+                let signature = {
+                    description: "",
+                    parameters: undefined,
+                    return: undefined
+                } as FunctionSignature;
+
+                let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Parameters"))[0];
+                let parameterListElement = before.nextElementSibling as HTMLDListElement;
+                signature.parameters = parseParameterList(parameterListElement);
+                if (!signature.parameters) {
                     // JS incompatible
                     continue;
                 }
 
-                signature.return = {
-                    description: inline(typeDescriptionElement.textContent),
-                    type: parseTypeNotationElement(typeNotationElement)
-                } as TypeNotation;
+                referenceMap.set(helpId, {
+                    description,
+                    type: "delegate",
+                    signature
+                } as DelegateTypeNotation);
             }
+            else if (title.endsWith(" constructor")) {
+                // example URL
+                // no parameter:
+                // https://msdn.microsoft.com/en-us/library/windows/apps/dn858104.aspx
+                // one parameter:
+                // https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.background.smartcardtrigger.smartcardtrigger.aspx
+                // multiple parameters:
+                // https://msdn.microsoft.com/en-us/library/windows/apps/dn631282.aspx
 
-            let notation = referenceMap.get(helpId) as FunctionTypeNotation || {
-                description: "", // 
-                type: "function",
-                signatures: []
-            } as FunctionTypeNotation;
-            notation.signatures.push(signature);
-
-            referenceMap.set(helpId, notation);
-            // Proposal: insert FunctionTypeNotation, and later check same key exists and append more signatures
-        }
-        else if (title.endsWith(" event")) {
-            // Example URL: https://msdn.microsoft.com/en-us/library/windows/apps/windows.media.capture.core.variablephotosequencecapture.photocaptured.aspx
-
-            let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Syntax"))[0];
-            let codesnippetElement = before.nextElementSibling;
-            let codesnippetText: string;
-            while (codesnippetElement.tagName === "CODESNIPPET") {
-                if (codesnippetElement.getAttribute("language") === "JavaScript") {
-                    codesnippetText = codesnippetElement.textContent;
-                    break;
+                
+                let ctorIndex = helpId.indexOf(".#ctor");
+                if (ctorIndex !== -1) {
+                    helpId = `${helpId.slice(0, ctorIndex)}.constructor`;
                 }
-                codesnippetElement = codesnippetElement.nextElementSibling;
-            }
+                else {
+                    debugger;
+                    throw new Error("Expected .ctor but not found");
+                }
 
-            if (!codesnippetText) {
-                // JS incompatible
-                continue;
-            }
+                let signature = {
+                    description,
+                    parameters: undefined,
+                    return: "instance"
+                } as FunctionSignature;
 
-            let eventListener = codesnippetText.match(eventListenerRegex);
-            let onevent = codesnippetText.match(oneventRegex);
+                let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Parameters"))[0];
+                let parameterListElement = before.nextElementSibling as HTMLDListElement;
+                signature.parameters = parseParameterList(parameterListElement);
+                if (!signature.parameters) {
+                    // JS incompatible
+                    continue;
+                }
 
-            before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Event information"))[0];
-            let table = before.nextElementSibling as HTMLTableElement;
-            let rows = Array.from(table.rows) as HTMLTableRowElement[];
-            if (rows.length > 1) {
-                debugger;
-                throw new Error("Unexpected multiple table rows");
-            }
-            let header = rows[0].children[0];
-            let typeNotationElement = rows[0].children[1];
-            let delegate = exportJavaScriptTypeNotation(parseTypeNotationElement(typeNotationElement as HTMLTableColElement, true))
-            if (!delegate) {
-                // JS compatibility is already checked above
-                throw new Error("Expected JS type but not found");
-            }
+                let notation = referenceMap.get(helpId) as FunctionTypeNotation || {
+                    description: "", // 
+                    type: "function",
+                    signatures: []
+                } as FunctionTypeNotation;
+                notation.signatures.push(signature);
 
-            if (!eventListener || !onevent) {
-                debugger;
-                throw new Error("Expected both event listener/onevent syntax but not found");
+                referenceMap.set(helpId, notation);
+                // Note: replace .#ctor(params) to .constructor
             }
-            referenceMap.set(helpId, {
-                description,
-                type: "event",
-                delegate
-            } as EventTypeNotation);
-        }
-        else if (title.endsWith(" structure") || title.endsWith(" interface")) {
-            if (categoryJs) {
-                continue; // Is there any JS-targeted document? 
+            else if (title.endsWith(" method")) {
+                let signature = {
+                    description,
+                    parameters: undefined,
+                    return: undefined
+                } as FunctionSignature;
+
+                let parentheses = parenthesisRegex.exec(helpId);
+                if (parentheses) {
+                    helpId = helpId.slice(0, parentheses.index);
+                } // may exist when with params, may not when without
+
+                let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Parameters"))[0];
+                let parameterListElement = before.nextElementSibling as HTMLDListElement;
+                signature.parameters = parseParameterList(parameterListElement);
+                if (!signature.parameters) {
+                    // JS incompatible
+                    continue;
+                }
+
+                before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Return value"))[0];
+                if (before) {
+                    let typeNotationElement = before.nextElementSibling as HTMLParagraphElement;
+                    let typeDescriptionElement = typeNotationElement.nextElementSibling;
+
+                    let type: string
+                    if (typeNotationElement.children.length > 0) {
+                        type = exportJavaScriptTypeNotation(parseTypeNotationElement(typeNotationElement));
+                        if (!type) {
+                            // JS incompatible
+                            continue;
+                        }
+                    }
+
+                    signature.return = {
+                        description: inline(typeDescriptionElement.textContent),
+                        type
+                    } as TypeNotation;
+                }
+
+                let notation = referenceMap.get(helpId) as FunctionTypeNotation || {
+                    description: "", // 
+                    type: "function",
+                    signatures: []
+                } as FunctionTypeNotation;
+                notation.signatures.push(signature);
+
+                referenceMap.set(helpId, notation);
+                // Proposal: insert FunctionTypeNotation, and later check same key exists and append more signatures
+            }
+            else if (title.endsWith(" event")) {
+                // Example URL: https://msdn.microsoft.com/en-us/library/windows/apps/windows.media.capture.core.variablephotosequencecapture.photocaptured.aspx
+
+                let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Syntax"))[0];
+                let codesnippetElement = before.nextElementSibling;
+                let codesnippetText: string;
+                while (codesnippetElement.tagName === "CODESNIPPET") {
+                    if (codesnippetElement.getAttribute("language") === "JavaScript") {
+                        codesnippetText = codesnippetElement.textContent;
+                        break;
+                    }
+                    codesnippetElement = codesnippetElement.nextElementSibling;
+                }
+
+                if (!codesnippetText) {
+                    // JS incompatible
+                    continue;
+                }
+
+                let eventListener = codesnippetText.match(eventListenerRegex);
+                let onevent = codesnippetText.match(oneventRegex);
+
+                before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Event information"))[0];
+                let table = before.nextElementSibling as HTMLTableElement;
+                let rows = Array.from(table.rows) as HTMLTableRowElement[];
+                if (rows.length > 1) {
+                    debugger;
+                    throw new Error("Unexpected multiple table rows");
+                }
+                let header = rows[0].children[0];
+                let typeNotationElement = rows[0].children[1];
+                let delegate = exportJavaScriptTypeNotation(parseTypeNotationElement(typeNotationElement as HTMLTableColElement, true))
+                if (!delegate) {
+                    // JS compatibility is already checked above
+                    throw new Error("Expected JS type but not found");
+                }
+
+                if (!eventListener || !onevent) {
+                    debugger;
+                    throw new Error("Expected both event listener/onevent syntax but not found");
+                }
+                referenceMap.set(helpId, {
+                    description,
+                    type: "event",
+                    delegate
+                } as EventTypeNotation);
+            }
+            else if (title.endsWith(" structure") || title.endsWith(" interface")) {
+                if (categoryJs) {
+                    continue; // Is there any JS-targeted document? 
+                }
+                else {
+                    continue;
+                }
+            }
+            else if (title.endsWith(" constructors") || title.endsWith(" methods") || title === "Content Removed") {
+                continue; // Do not parse meta pages
             }
             else {
+                debugger;
                 continue;
             }
         }
-        else if (title.endsWith(" constructors") || title.endsWith(" methods")) {
-            continue; // Do not parse meta pages
-        }
-        else {
-            debugger;
-            continue;
+        catch (e) {
+            throw new Error(`An error is thrown from ${filepath}: ${e.message}`);
         }
     }
 
@@ -401,6 +409,9 @@ async function parseAsMap() {
                 }
                 else if (node.tagName === "STRONG" || node.tagName === "SPAN") {
                     proposedTypeName = trimmedTextContent
+                }
+                else if (node.tagName === "P") {
+                    break;
                 }
                 else {
                     debugger;

@@ -1,7 +1,9 @@
 **/referencedocs/
 **/built/
-uwp-type-iterator/js/app.js
-uwp-type-iterator/js/app.js.map
+uwp-type-iterator/*.js
+uwp-type-iterator/*.js.map
+uwp-type-iterator/js/iterator.js
+uwp-type-iterator/js/iterator.js.map
 uwp-type-iterator/sources/**/*.js
 uwp-type-iterator/sources/**/*.js.map
 uwp-type-mapper/*.js
