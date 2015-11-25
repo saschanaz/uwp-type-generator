@@ -39,8 +39,13 @@ async function main() {
     console.log("Mapping...");
     map(iterations, docs);
 
-    console.log("Storing result file...");
-    await fspromise.writeFile(args["-o"], JSON.stringify(iterations, null, 2));
+    if (args["-mapout"]) {
+        // for debugging purpose
+        console.log("Storing mapped iteration file...");
+        await fspromise.writeFile(args["-mapout"], JSON.stringify(iterations, null, 2));
+    }
+    console.log("Storing result d.ts file...");
+    await fspromise.writeFile(args["-o"], writeAsDTS(iterations, "Windows"));
 
     console.log("Finished.");
     process.exit();
@@ -54,10 +59,6 @@ function map(iteration: TypeDescription, docs: any) {
 
         let item = iteration[itemName] as TypeNameOrDescription;
         if (typeof item === "string") {
-            if (item !== "unknown") {
-                continue;
-                // TODO: add descriptions!
-            }
             if ((itemName as string).startsWith("on")) {
                 itemName = (itemName as string).slice(2);
             }
@@ -120,7 +121,9 @@ function map(iteration: TypeDescription, docs: any) {
             }
 
             if (item.__type === "structure") {
-
+                if (doc && doc.type === "enumeration") {
+                    item.__type = doc.type;
+                }
                 map(item, docs);
             }
             else if (item.__type === "class") {
@@ -146,6 +149,43 @@ function map(iteration: TypeDescription, docs: any) {
         return false;
     }
 }
+
+function writeAsDTS(iteration: TypeDescription, iterationName: string) {
+    let stack: TypeDescription[] = [];
+    let indentBase = "    ";
+    return write(0, iteration, iterationName);
+
+    function write(indentRepeat: number, iteration: TypeDescription, iterationName: string) {
+        let initialIndent = repeatIndent(indentBase, indentRepeat);
+        let result = "";
+        
+        if (iteration.__type === "structure") {
+            result += initialIndent + `namespace ${iterationName} {\r\n`
+            for (let itemName in iteration) {
+                if ((itemName as string).startsWith("__")) {
+                    continue;
+                }
+                result += write(indentRepeat + 1, iteration[itemName], itemName);
+            }
+            result += initialIndent + '}\r\n';
+        }
+        else if (iteration.__type === "class") {
+            result += initialIndent + `class ${iterationName} {\r\n`;
+            // TODO: recursive call
+            result += initialIndent + '}\r\n';
+        }
+        return result;
+    }
+
+    function repeatIndent(indent: string, repeat: number) {
+        let result = "";
+        for (let i = 0; i < repeat; i++) {
+            result += indent;
+        }
+        return result;
+    }
+}
+
 
 async function loadDocs(forceReparse?: boolean) {
     if (await fspromise.exists("built/typemap.json") && !forceReparse) {
@@ -176,7 +216,7 @@ function parseArgs() {
             result[arg] = undefined;
             proposedArgName = undefined;
         }
-        else if (arg === "-i" || arg === "-o") {
+        else if (arg === "-i" || arg === "-o" || arg === "-mapout") {
             proposedArgName = arg;
             result[arg] = undefined;
         }
