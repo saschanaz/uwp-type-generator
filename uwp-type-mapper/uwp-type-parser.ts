@@ -104,10 +104,35 @@ async function parseAsMap() {
                 /*
                 TODO: parse member descriptions
                 */
+
                 referenceMap.set(helpId, {
                     description,
                     type: "enumeration"
                 } as TypeNotation);
+
+                let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Members"))[0];
+                let table = before.nextElementSibling.nextElementSibling as HTMLTableElement;
+
+                if (table.tagName !== "TABLE") {
+                    throw new Error("Unexpected enumeration document format");
+                }
+
+                let rows = Array.from(table.rows).slice(1) as HTMLTableRowElement[];
+
+                for (let row of rows) {
+                    let nameCol = row.children[0] as HTMLTableColElement;
+                    let descCol = row.children[2] as HTMLTableColElement;
+                    if (nameCol.children.length > 1) {
+                        referenceMap.set(`${helpId}.${nameCol.children[1].textContent.trim().toLowerCase()}`, {
+                            description: inline(descCol.textContent),
+                            type: "number"
+                        });
+                    }
+                    else if (categoryJs) {
+                        debugger;
+                    }
+                }
+
             }
             else if (title.endsWith(" namespace")) {
                 referenceMap.set(helpId, {
