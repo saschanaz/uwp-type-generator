@@ -1,6 +1,6 @@
 ﻿import * as fs from "fs"
 
-export function readFiles(path: string) {
+export function readDirectory(path: string) {
     return new Promise<string[]>((resolve, reject) => {
         fs.readdir(path, (err, files) => {
             if (err) {
@@ -51,10 +51,24 @@ export function makeDirectory(path: string) {
         })
     })
 }
+
 export function exists(path: string) {
     return new Promise<boolean>((resolve, reject) => {
         fs.exists(path, (exists) => {
             resolve(exists);
+        });
+    });
+}
+
+export function stat(path: string) {
+    return new Promise<fs.Stats>((resolve, reject) => {
+        fs.stat(path, (err, stats) => {
+            if (err) {
+                reject(err);
+            }
+            else {
+                resolve(stats);
+            }
         });
     });
 }

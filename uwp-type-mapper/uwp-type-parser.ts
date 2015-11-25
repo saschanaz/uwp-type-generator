@@ -58,7 +58,7 @@ async function parseAsMap() {
     let whitespaceRepeatRegex = /\s{1,}/g;
     let eventListenerRegex = /\w+\.addEventListener\(\"(\w+)\"\, \w+\)/;
     let oneventRegex = /\w+\.on(\w+) =/;
-    let files = await fspromise.readFiles(referencepath);
+    let files = await findAllHTMLFilePaths(referencepath);
     let skippedById: string[] = [];
 
     for (let filepath of files) {
@@ -526,4 +526,24 @@ function isElement(node: Node): node is Element {
 }
 function isAnchorElement(element: Element): element is HTMLAnchorElement {
     return element.tagName === "A";
+}
+
+async function findAllHTMLFilePaths(directory: string) {
+    let htmlFilePaths: string[] = [];
+    await findHTMLFilePaths(directory);
+    return htmlFilePaths;
+
+    async function findHTMLFilePaths(directory: string) {
+        let paths = await fspromise.readDirectory(directory);
+        for (let path of paths) {
+            let fullPath = `${directory}/${path}`;
+            let stat = await fspromise.stat(fullPath);
+            if (stat.isDirectory()) {
+                await findHTMLFilePaths(fullPath);
+            }
+            else if (stat.isFile() && (path.endsWith(".htm") || path.endsWith(".html"))) {
+                htmlFilePaths.push(fullPath);
+            }
+        }
+    }
 }
