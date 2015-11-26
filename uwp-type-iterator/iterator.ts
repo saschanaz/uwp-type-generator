@@ -16,6 +16,7 @@ async function generate() {
     }
 
     async function enumerate(fullName: string, namespace: any) {
+        /* Just structures, classes, and nothing else in an iteration file */
         let description = {
             __type: "structure", __fullname: fullName
         } as TypeDescription;
@@ -26,50 +27,36 @@ async function generate() {
             properties.delete("name");
             properties.delete("caller");
             properties.delete("arguments");
+            properties.delete("prototype"); // will be processed later
         }
         properties.delete("toString");
         properties.delete("constructor"); // should be added by mapper
 
         for (let itemName of properties) {
-            let item: any;
-            try {
-                item = namespace[itemName];
-            }
-            catch (e) {
-                description[itemName] = "unknown";
-                // Some class constructor exposes static properties that allow access only in specific environment
-                // e.g. Windows.ApplicationModel.Store.CurrentApp
-            }
             let itemFullName = `${fullName}.${itemName}`;
+            if ((itemName as string)[0].toUpperCase() !== itemName[0]) {
+                // Not starts with capital letter
+                await write(`${itemFullName}`);
+                description[itemName] = "unknown";
+                continue;
+            }
+
+            let item = namespace[itemName];
             let type = typeof item;
-            if ((itemName as string)[0].toUpperCase() === itemName[0]) {
-                // Assume that upper cased item is a namespace
-                if (item != null) {
-                    if (type === "object") {
-                        await write(itemFullName);
-                        description[itemName] = await enumerate(itemFullName, item);
-                    }
-                    else {
-                        await write(`${itemFullName}: class extends ${item.prototype.__proto__.constructor.name}`);
-                        description[itemName] = await enumerateClass(itemFullName, item);
-                    }
+            if (item != null) {
+                // Assume that upper cased item is a namespace or a class
+                if (type === "object") {
+                    await write(itemFullName);
+                    description[itemName] = await enumerate(itemFullName, item);
                 }
                 else {
-                    await write(`${itemFullName}: ${item}`);
-                    description[itemName] = item === null ? "null" : "undefined";
+                    await write(`${itemFullName}: class extends ${item.prototype.__proto__.constructor.name}`);
+                    description[itemName] = await enumerateClass(itemFullName, item);
                 }
             }
             else {
-                if (type === "object") {
-                    if (item !== null) {
-                        type = item.__proto__.constructor.name;
-                    }
-                    else { // null
-                        type = "null";
-                    }
-                }
-                description[itemName] = type;
-                await write(`${itemFullName}: ${type}`);
+                await write(`${itemFullName}: void`);
+                description[itemName] = item === null ? "null" : "undefined";
             }
         }
         return description;
