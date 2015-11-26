@@ -433,10 +433,10 @@ async function parseAsMap() {
             if (isElement(node)) {
                 if (isAnchorElement(node)) {
                     // TODO: parse
-                    proposedTypeName = node.href.slice(mshelppath.length);
+                    proposedTypeName = normalizeTypeName(decodeURI(node.href.slice(mshelppath.length)));
                 }
                 else if (node.tagName === "STRONG" || node.tagName === "SPAN") {
-                    proposedTypeName = trimmedTextContent
+                    proposedTypeName = normalizeTypeName(trimmedTextContent)
                 }
                 else if (node.tagName === "P") {
                     break;
@@ -481,10 +481,10 @@ async function parseAsMap() {
                 if (brackets) {
                     let languages = parseLanguageIndicator(text.substr(brackets.index, brackets[0].length))
                     // language name, type name
-                    return { type: text.slice(0, brackets.index).trim(), languages } as TypeForLanguage
+                    return { type: normalizeTypeName(text.slice(0, brackets.index).trim()), languages } as TypeForLanguage
                 }
                 else {
-                    return { type: text } as TypeForLanguage;
+                    return { type: normalizeTypeName(text) } as TypeForLanguage;
                 }
             }
             else {
@@ -515,6 +515,18 @@ async function parseAsMap() {
 
     function inline(text: string) {
         return text.trim().replace(whitespaceRepeatRegex, " ");
+    }
+
+    function normalizeTypeName(typeName: string) {
+        if (typeName === "String" || typeName === "Boolean" || typeName === "Object" || typeName === "Number") {
+            return typeName.toLowerCase();
+        }
+        let backtickIndex = typeName.indexOf("`");
+        if (backtickIndex !== -1) {
+            return typeName.slice(0, backtickIndex);
+        }
+
+        return typeName
     }
 }
 

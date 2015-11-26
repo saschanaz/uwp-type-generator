@@ -153,10 +153,11 @@ function map(iteration: TypeDescription, docs: any) {
 function writeAsDTS(iteration: TypeDescription, iterationName: string) {
     let stack: TypeDescription[] = [];
     let indentBase = "    ";
-    return write(0, iteration, iterationName);
+    return "declare " + write(0, iteration, iterationName);
 
     function write(indentRepeat: number, iteration: TypeDescription, iterationName: string) {
         let initialIndent = repeatIndent(indentBase, indentRepeat);
+        let nextLevelIndent = initialIndent + indentBase;
         let result = "";
         
         if (iteration.__type === "structure") {
@@ -169,9 +170,59 @@ function writeAsDTS(iteration: TypeDescription, iterationName: string) {
             }
             result += initialIndent + '}\r\n';
         }
+        else if (iteration.__type === "enumeration") {
+            result += initialIndent + `enum ${iterationName} {\r\n`;
+            for (let itemName in iteration) {
+                if ((itemName as string).startsWith("__")) {
+                    continue;
+                }
+                let item = iteration[itemName] as TypeDescription;
+                if (item.__description) {
+                    result += nextLevelIndent + `/** ${item.__description} */\r\n`;
+                }
+                result += nextLevelIndent + `${itemName},\r\n`;
+            }
+            result += initialIndent + '}\r\n';
+        }
         else if (iteration.__type === "class") {
-            result += initialIndent + `class ${iterationName} {\r\n`;
+            result += initialIndent + `class ${iterationName}`;
+            if ((iteration as ClassDescription).__extends && (iteration as ClassDescription).__extends !== "Object") {
+                result += ` extends ${(iteration as ClassDescription).__extends}`
+            }
+            if ((iteration as ClassDescription).__eventTarget) {
+                result += " implements ImmutableEventTarget"; // Only have add/removeEventListener without dispatchEvent
+            }
+            result += ' {\r\n';
             // TODO: recursive call
+
+            for (let itemName in iteration) {
+                if ((itemName as string).startsWith("__") || itemName === "prototype") {
+                    continue;
+                }
+                let item = iteration[itemName] as TypeDescription;
+                if (item.__type === "function") {
+                    for (let signature of (item as FunctionDescription).__signatures) {
+                        // TODO: description for parameters
+                        result += nextLevelIndent + `/** ${item.__description} */\r\n`;
+                        result += nextLevelIndent + `static ${itemName}(${writeParametersAsDTS(signature)}): ${signature.return ? (signature.return as TypeNotation).type : "void"};\r\n`;
+                    }
+                }
+            }
+            let prototype = (iteration as ClassDescription).prototype;
+            for (let itemName in prototype) {
+                if ((itemName as string).startsWith("__")) {
+                    continue;
+                }
+                let item = prototype[itemName] as TypeDescription;
+                if (item.__type === "function") {
+                    for (let signature of (item as FunctionDescription).__signatures) {
+                        // TODO: description for parameters
+                        result += nextLevelIndent + `/** ${item.__description} */\r\n`;
+                        result += nextLevelIndent + `${itemName}(${writeParametersAsDTS(signature)}): ${signature.return ? (signature.return as TypeNotation).type : "void"};\r\n`;
+                    }
+                }
+            }
+
             result += initialIndent + '}\r\n';
         }
         return result;
@@ -183,6 +234,17 @@ function writeAsDTS(iteration: TypeDescription, iterationName: string) {
             result += indent;
         }
         return result;
+    }
+    function writeParametersAsDTS(signature: FunctionSignature) {
+        let parameterArray: string[] = [];
+        for (let parameter of signature.parameters) {
+            let key = parameter.key;
+            if (key === "arguments") {
+                key = "args"; // tsc errors if the parameter name is "arguments" even when in ambient condition
+            }
+            parameterArray.push(`${key}: ${parameter.type}`);
+        }
+        return parameterArray.join(', ');
     }
 }
 

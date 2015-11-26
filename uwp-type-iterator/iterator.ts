@@ -5,7 +5,7 @@ declare var log: HTMLDivElement;
 export interface TypeDescription { __type: string; __fullname: string; __description?: string;[key: string]: any }
 export type TypeNameOrDescription = string | TypeDescription;
 
-export interface ClassDescription extends TypeDescription { __type: "class"; __extends: TypeDescription; __eventTarget?: boolean; prototype: TypeDescription; }
+export interface ClassDescription extends TypeDescription { __type: "class"; __extends: string; __eventTarget?: boolean; prototype: TypeDescription; }
 
 async function generate() {
     try {
