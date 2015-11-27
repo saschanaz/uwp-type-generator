@@ -150,17 +150,25 @@ function map(iteration: TypeDescription, docs: any) {
     }
 }
 
-function writeAsDTS(iteration: TypeDescription, iterationName: string) {
+function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
     let stack: TypeDescription[] = [];
     let indentBase = "    ";
-    return "declare " + write(0, iteration, iterationName);
+    return "declare " + write(0, baseIteration, baseIterationName);
 
-    function write(indentRepeat: number, iteration: TypeDescription, iterationName: string) {
+    function write(indentRepeat: number, iteration: TypeNameOrDescription, iterationName: string) {
         let initialIndent = repeatIndent(indentBase, indentRepeat);
         let nextLevelIndent = initialIndent + indentBase;
         let result = "";
-        
-        if (iteration.__type === "structure") {
+
+        if (typeof iteration === "string") {
+            if (iteration === "unknown") {
+                result += initialIndent + `var ${iterationName}: any; /* unmapped type */\r\n`;
+            }
+            //else {
+            //    throw new Error("Unexpected iteration type");
+            //}
+        }
+        else if (iteration.__type === "structure") {
             result += initialIndent + `namespace ${iterationName} {\r\n`
             for (let itemName in iteration) {
                 if ((itemName as string).startsWith("__")) {
@@ -185,49 +193,70 @@ function writeAsDTS(iteration: TypeDescription, iterationName: string) {
             result += initialIndent + '}\r\n';
         }
         else if (iteration.__type === "class") {
-            result += initialIndent + `class ${iterationName}`;
-            if ((iteration as ClassDescription).__extends && (iteration as ClassDescription).__extends !== "Object") {
-                result += ` extends ${(iteration as ClassDescription).__extends}`
-            }
-            if ((iteration as ClassDescription).__eventTarget) {
-                result += " implements ImmutableEventTarget"; // Only have add/removeEventListener without dispatchEvent
-            }
-            result += ' {\r\n';
-            // TODO: recursive call
-
-            for (let itemName in iteration) {
-                if ((itemName as string).startsWith("__") || itemName === "prototype") {
-                    continue;
-                }
-                let item = iteration[itemName] as TypeDescription;
-                if (item.__type === "function") {
-                    for (let signature of (item as FunctionDescription).__signatures) {
-                        // TODO: description for parameters
-                        result += nextLevelIndent + `/** ${item.__description} */\r\n`;
-                        result += nextLevelIndent + `static ${itemName}(${writeParametersAsDTS(signature)}): ${signature.return ? (signature.return as TypeNotation).type : "void"};\r\n`;
-                    }
-                }
-            }
-            let prototype = (iteration as ClassDescription).prototype;
-            for (let itemName in prototype) {
-                if ((itemName as string).startsWith("__")) {
-                    continue;
-                }
-                let item = prototype[itemName] as TypeDescription;
-                if (item.__type === "function") {
-                    for (let signature of (item as FunctionDescription).__signatures) {
-                        // TODO: description for parameters
-                        result += nextLevelIndent + `/** ${item.__description} */\r\n`;
-                        result += nextLevelIndent + `${itemName}(${writeParametersAsDTS(signature)}): ${signature.return ? (signature.return as TypeNotation).type : "void"};\r\n`;
-                    }
-                }
-            }
-
-            result += initialIndent + '}\r\n';
+            result += `${writeClass(indentRepeat, iteration as ClassDescription, iterationName)}\r\n`;
         }
         return result;
     }
 
+
+    function writeClass(indentRepeat: number, constructor: ClassDescription, className: string) {
+        let initialIndent = repeatIndent(indentBase, indentRepeat);
+        let nextLevelIndent = initialIndent + indentBase;
+        let result = "";
+        if (constructor.__description) {
+            result += initialIndent + `/** ${constructor.__description} */\r\n`;
+        }
+        result += initialIndent + `class ${className}`;
+
+        if (constructor.__extends && constructor.__extends !== "Object") {
+            result += ` extends ${constructor.__extends}`
+        }
+        if (constructor.__eventTarget) {
+            result += " implements ImmutableEventTarget"; // Only have add/removeEventListener without dispatchEvent
+        }
+        result += ' {\r\n';
+
+        for (let itemName in constructor) {
+            if ((itemName as string).startsWith("__") || itemName === "prototype") {
+                continue;
+            }
+            result += writeClassMemberLines(indentRepeat + 1, constructor[itemName] as TypeNameOrDescription, itemName, true);
+        }
+        let prototype = constructor.prototype;
+        for (let itemName in prototype) {
+            if ((itemName as string).startsWith("__")) {
+                continue;
+            }
+            result += writeClassMemberLines(indentRepeat + 1, prototype[itemName] as TypeNameOrDescription, itemName);
+        }
+
+        result += initialIndent + '}';
+        return result;
+    }
+    function writeClassMemberLines(indentRepeat: number, member: TypeNameOrDescription, memberName: string, asStatic?: boolean) {
+        let indent = repeatIndent(indentBase, indentRepeat);
+        let result = "";
+        let prefix = asStatic ? "static " : "";
+
+        if (typeof member === "string") {
+            if (member === "unknown") {
+                result += indent + `${prefix}${memberName}: any; /* unmapped type */\r\n`;
+            }
+            //else {
+            //    throw new Error("Unexpected iteration type");
+            //}
+        }
+        else {
+            if (member.__type === "function") {
+                for (let signature of (member as FunctionDescription).__signatures) {
+                    // TODO: description for parameters
+                    result += indent + `/** ${signature.description} */\r\n`;
+                    result += indent + `${prefix}${memberName}(${writeParameters(signature)}): ${signature.return ? (signature.return as TypeNotation).type : "void"};\r\n`;
+                }
+            }
+        }
+        return result;
+    }
     function repeatIndent(indent: string, repeat: number) {
         let result = "";
         for (let i = 0; i < repeat; i++) {
@@ -235,7 +264,7 @@ function writeAsDTS(iteration: TypeDescription, iterationName: string) {
         }
         return result;
     }
-    function writeParametersAsDTS(signature: FunctionSignature) {
+    function writeParameters(signature: FunctionSignature) {
         let parameterArray: string[] = [];
         for (let parameter of signature.parameters) {
             let key = parameter.key;

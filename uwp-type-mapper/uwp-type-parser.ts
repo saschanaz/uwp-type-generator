@@ -431,7 +431,6 @@ async function parseAsMap() {
             trimmedTextContent = node.textContent.trim();
             if (isElement(node)) {
                 if (isAnchorElement(node)) {
-                    // TODO: parse
                     proposedTypeName = normalizeTypeName(decodeURI(node.href.slice(mshelppath.length)));
                 }
                 else if (node.tagName === "STRONG" || node.tagName === "SPAN") {
