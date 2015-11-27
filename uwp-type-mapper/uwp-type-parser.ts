@@ -61,7 +61,11 @@ async function parseAsMap() {
     let files = await findAllHTMLFilePaths(referencepath);
     let skippedById: string[] = [];
 
+    let i = 0;
+    let length = files.length;
     for (let filepath of files) {
+        i++;
+        console.log(`Parsing ${filepath} (${(i / length * 100).toFixed(4)} %, skipping ${skippedById.length} out of ${length} docs)...`);
         try {
             let text = await fspromise.readFile(`${referencepath}/${filepath}`);
             let doc = jsdom.jsdom(text) as Document;
@@ -75,16 +79,11 @@ async function parseAsMap() {
                 helpId = helpId.slice(startIndex + 1);
             }
             else {
-                let metaF1 = doc.head.querySelector("meta[name$=F1]") as HTMLMetaElement;
-                if (metaF1) {
-                    skippedById.push(metaF1.content);
-                }
-                else {
-                    skippedById.push(doc.title);
-                }
+                skippedById.push(doc.title);
                 continue;
             }
-            if (helpId.startsWith("windows.ui.xaml")) {
+            if (!categoryJs || helpId.startsWith("windows.ui.xaml")) {
+                skippedById.push(doc.title);
                 continue; // Do not parse XAML API
             }
             // TODO: use target language meta tag? it can only be used with VS document
