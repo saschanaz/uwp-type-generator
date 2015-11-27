@@ -367,6 +367,8 @@ async function parseAsMap() {
                     // No JS type
                     return;
                 }
+                
+                // TODO: Fix "out parameter" problem https://msdn.microsoft.com/en-us/library/windows/apps/windows.networking.servicediscovery.dnssd.dnssdserviceinstancecollection.indexof.aspx
 
                 let parameterDescription: string;
                 if (child.children[1]) {
@@ -527,8 +529,11 @@ async function parseAsMap() {
     }
 
     function normalizeTypeName(typeName: string) {
-        if (typeName === "String" || typeName === "Boolean" || typeName === "Object" || typeName === "Number") {
+        if (typeName === "String" || typeName === "Boolean" || typeName === "Number") {
             return typeName.toLowerCase();
+        }
+        else if (typeName === "Object") {
+            return "any";
         }
         let backtickIndex = typeName.indexOf("`");
         if (backtickIndex !== -1) {
