@@ -312,7 +312,7 @@ async function parseAsMap() {
                     debugger;
                     throw new Error("Expected both event listener/onevent syntax but not found");
                 }
-                referenceMap.set(helpId, {
+                referenceMap.set(addOnPrefixOnHelpId(helpId), {
                     description,
                     type: "event",
                     delegate
@@ -341,6 +341,16 @@ async function parseAsMap() {
 
     return referenceMap;
 
+    function addOnPrefixOnHelpId(helpId: string) {
+        let lastDotIndex = helpId.lastIndexOf(".");
+        if (lastDotIndex === -1) {
+            throw new Error("Incorrect help ID");
+        }
+        let base = helpId.slice(0, lastDotIndex);
+        let shortName = helpId.slice(lastDotIndex + 1);
+
+        return `${base}.on${shortName}`
+    }
 
     function parseParameterList(listElement: HTMLDListElement): FunctionParameter[] {
         let parameters: FunctionParameter[] = [];
@@ -397,6 +407,7 @@ async function parseAsMap() {
             Else:
                 Break, assuming there is no more type description
         */
+        // TODO: Fix "array of " problem https://msdn.microsoft.com/en-us/library/windows/apps/windows.media.protection.playready.nddownloadenginenotifier.ondatareceived.aspx
         let typeMap = new Map<string, string>();
 
         let node = notationElement.firstChild;

@@ -59,10 +59,6 @@ function map(iteration: TypeDescription, docs: any) {
 
         let item = iteration[itemName] as TypeNameOrDescription;
         if (typeof item === "string") {
-            if ((itemName as string).startsWith("on")) {
-                itemName = (itemName as string).slice(2);
-            }
-
             let fullName = `${iteration.__fullname}.${itemName}`.toLowerCase();
 
             let doc = docs[fullName] as TypeNotation;
@@ -96,7 +92,7 @@ function map(iteration: TypeDescription, docs: any) {
                     TODO: methods and onevents must be distingushable (by __type?)
                     Do FunctionDescription have to allow "function"|"?" <- What name? callback?
                      */
-                    iteration[`on${itemName}`] = {
+                    iteration[itemName] = {
                         __fullname: fullName,
                         __type: "callback",
                         __description: doc.description,
