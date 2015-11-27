@@ -160,6 +160,9 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
             if (iteration === "unknown") {
                 result += initialIndent + `var ${iterationName}: any; /* unmapped type */\r\n`;
             }
+            else if (iteration === "undefined") {
+                result += initialIndent + `var ${iterationName}: void;\r\n`;
+            }
             //else {
             //    throw new Error("Unexpected iteration type");
             //}
@@ -238,9 +241,9 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
             if (member === "unknown") {
                 result += indent + `${prefix}${memberName}: any; /* unmapped type */\r\n`;
             }
-            //else {
-            //    throw new Error("Unexpected iteration type");
-            //}
+            else {
+                throw new Error("Unexpected class member type");
+            }
         }
         else {
             if (member.__type === "function") {

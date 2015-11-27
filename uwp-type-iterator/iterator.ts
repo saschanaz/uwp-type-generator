@@ -56,7 +56,7 @@ async function generate() {
             }
             else {
                 await write(`${itemFullName}: void`);
-                description[itemName] = item === null ? "null" : "undefined";
+                description[itemName] = item === null ? "unknown" : "undefined";
             }
         }
         return description;
