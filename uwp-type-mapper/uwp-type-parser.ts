@@ -413,11 +413,25 @@ async function parseAsMap() {
         let typeMap = new Map<string, string>();
 
         let node = notationElement.firstChild;
-
+        
+        let typeNotationPrefix: string;
         if (!omitTypeIndication) {
             if (isText(node) && node.textContent.indexOf("Type:") === 0) {
-                let parsed = parseTypeNotationString(node.textContent.slice(5));
-                if (parsed.type) {
+                let sliced = node.textContent.slice(5).trim();
+                if (sliced === "array of") {
+                    typeNotationPrefix = sliced;
+                }
+                else if (sliced.length > 0) {
+                    let parsed = parseTypeNotationString(sliced);
+                    if (!parsed.type) {
+                        debugger;
+                        throw new Error("Unexpected empty type name");
+                    }
+
+                    if (typeNotationPrefix) {
+                        parsed.type = `${typeNotationPrefix} ${parsed.type}`;
+                        typeNotationPrefix = undefined;
+                    }
                     if (parsed.languages) {
                         for (let language of parsed.languages) {
                             typeMap.set(language, parsed.type);
@@ -458,13 +472,22 @@ async function parseAsMap() {
                 }
             }
             else if (isText(node) && trimmedTextContent.length > 0) {
-                let parsed = parseTypeNotationString(node.textContent);
-                if (parsed.type) {
-                    proposedTypeName = parsed.type;
+                if (trimmedTextContent === "array of") {
+                    typeNotationPrefix = trimmedTextContent;
                 }
-                if (parsed.languages) {
-                    for (let language of parsed.languages) {
-                        typeMap.set(language, proposedTypeName);
+                else {
+                    let parsed = parseTypeNotationString(trimmedTextContent);
+                    if (parsed.type) {
+                        proposedTypeName = parsed.type;
+                    }
+                    if (typeNotationPrefix) {
+                        proposedTypeName = `${typeNotationPrefix} ${proposedTypeName}`;
+                        typeNotationPrefix = undefined;
+                    }
+                    if (parsed.languages) {
+                        for (let language of parsed.languages) {
+                            typeMap.set(language, proposedTypeName);
+                        }
                     }
                 }
             }
@@ -486,20 +509,14 @@ async function parseAsMap() {
             "typeName [languageName]" -> { type: typeName, languages: [languageName] }
             "[languageName]" -> { languages: [languageName] }
             */
-            text = text.trim();
-            if (text.length > 0) {
-                let brackets = bracketRegex.exec(text);
-                if (brackets) {
-                    let languages = parseLanguageIndicator(text.substr(brackets.index, brackets[0].length))
-                    // language name, type name
-                    return { type: normalizeTypeName(text.slice(0, brackets.index).trim()), languages } as TypeForLanguage
-                }
-                else {
-                    return { type: normalizeTypeName(text) } as TypeForLanguage;
-                }
+            let brackets = bracketRegex.exec(text);
+            if (brackets) {
+                let languages = parseLanguageIndicator(text.substr(brackets.index, brackets[0].length))
+                // language name, type name
+                return { type: normalizeTypeName(text.slice(0, brackets.index).trim()), languages } as TypeForLanguage
             }
             else {
-                return {} as TypeForLanguage;
+                return { type: normalizeTypeName(text) } as TypeForLanguage;
             }
         }
 
