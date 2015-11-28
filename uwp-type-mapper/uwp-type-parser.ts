@@ -124,7 +124,7 @@ async function parseAsMap() {
                     if (nameCol.children.length > 1) {
                         referenceMap.set(`${helpId}.${nameCol.children[1].textContent.trim().toLowerCase()}`, {
                             description: inline(descCol.textContent),
-                            type: "number"
+                            type: "Number"
                         });
                     }
                     else if (categoryJs) {
@@ -253,6 +253,11 @@ async function parseAsMap() {
                             // JS incompatible
                             continue;
                         }
+                    }
+                    else {
+                        // Some document has "Return value" header but does not have type notation
+                        // https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.calls.phonecallhistorystore.getentryasync.aspx?cs-save-lang=1&cs-lang=javascript#code-snippet-1
+                        type = "unknown";
                     }
 
                     signature.return = {
@@ -458,10 +463,10 @@ async function parseAsMap() {
             trimmedTextContent = node.textContent.trim();
             if (isElement(node)) {
                 if (isAnchorElement(node)) {
-                    proposedTypeName = normalizeTypeName(decodeURI(node.href.slice(mshelppath.length)));
+                    proposedTypeName = decodeURI(node.href.slice(mshelppath.length));
                 }
                 else if (node.tagName === "STRONG" || node.tagName === "SPAN") {
-                    proposedTypeName = normalizeTypeName(trimmedTextContent)
+                    proposedTypeName = trimmedTextContent
                 }
                 else if (node.tagName === "P") {
                     break;
@@ -513,10 +518,10 @@ async function parseAsMap() {
             if (brackets) {
                 let languages = parseLanguageIndicator(text.substr(brackets.index, brackets[0].length))
                 // language name, type name
-                return { type: normalizeTypeName(text.slice(0, brackets.index).trim()), languages } as TypeForLanguage
+                return { type: text.slice(0, brackets.index).trim(), languages } as TypeForLanguage
             }
             else {
-                return { type: normalizeTypeName(text) } as TypeForLanguage;
+                return { type: text } as TypeForLanguage;
             }
         }
 
@@ -543,21 +548,6 @@ async function parseAsMap() {
 
     function inline(text: string) {
         return text.trim().replace(whitespaceRepeatRegex, " ");
-    }
-
-    function normalizeTypeName(typeName: string) {
-        if (typeName === "String" || typeName === "Boolean" || typeName === "Number") {
-            return typeName.toLowerCase();
-        }
-        else if (typeName === "Object") {
-            return "any";
-        }
-        let backtickIndex = typeName.indexOf("`");
-        if (backtickIndex !== -1) {
-            return typeName.slice(0, backtickIndex);
-        }
-
-        return typeName
     }
 }
 

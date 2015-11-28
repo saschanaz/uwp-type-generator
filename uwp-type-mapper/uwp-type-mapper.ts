@@ -250,7 +250,15 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
                 for (let signature of (member as FunctionDescription).__signatures) {
                     // TODO: description for parameters
                     result += indent + `/** ${signature.description} */\r\n`;
-                    result += indent + `${prefix}${memberName}(${writeParameters(signature)}): ${signature.return ? (signature.return as TypeNotation).type : "void"};\r\n`;
+                    result += indent + `${prefix}${memberName}(${writeParameters(signature)}): `;
+                    let returnType = signature.return ? normalizeTypeName((signature.return as TypeNotation).type) : "void";
+                    if (returnType !== "unknown") {
+                        result += `${returnType};`;
+                    }
+                    else {
+                        result += "any; /* unmapped return type */";
+                    }
+                    result += "\r\n";
                 }
             }
         }
@@ -270,9 +278,40 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
             if (key === "arguments") {
                 key = "args"; // tsc errors if the parameter name is "arguments" even when in ambient condition
             }
-            parameterArray.push(`${key}: ${parameter.type}`);
+            parameterArray.push(`${key}: ${normalizeTypeName(parameter.type)}`);
         }
         return parameterArray.join(', ');
+    }
+
+
+    function normalizeTypeName(typeName: string) {
+        let arrayIndication = false;
+        if (!typeName) {
+            debugger;
+        }
+        if (typeName.startsWith("array of ")) {
+            arrayIndication = true;
+            typeName = typeName.slice(9);
+        }
+
+        if (typeName === "String" || typeName === "Boolean" || typeName === "Number") {
+            typeName = typeName.toLowerCase();
+        }
+        else if (typeName === "Object") {
+            typeName = "any";
+        }
+        else {
+            let backtickIndex = typeName.indexOf("`");
+            if (backtickIndex !== -1) {
+                typeName = typeName.slice(0, backtickIndex);
+            }
+        }
+
+        if (arrayIndication) {
+            typeName += '[]';
+        }
+
+        return typeName;
     }
 }
 
