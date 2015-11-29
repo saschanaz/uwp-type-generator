@@ -4,7 +4,7 @@ import parse from "./uwp-type-parser"
 import {
 TypeNotation,
 FunctionTypeNotation,
-DescriptedKeyTypePair,
+DescribedKeyTypePair,
 FunctionSignature,
 DelegateTypeNotation,
 EventTypeNotation
@@ -21,7 +21,7 @@ main().catch((err) => console.error(err));
 interface InterfaceLiteralTypeNotation {
     description: ""; // describe in key-type pair array
     type: "interfaceliteral"
-    members: DescriptedKeyTypePair[];
+    members: DescribedKeyTypePair[];
 }
 
 interface ExtendedFunctionSignature extends FunctionSignature {
@@ -356,7 +356,7 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
             description: signature.description,
             parameters: []
         } as FunctionSignature;
-        let outParameters: DescriptedKeyTypePair[] = [];
+        let outParameters: DescribedKeyTypePair[] = [];
         let codeSnippetArgs = extractCallArguments(signature.codeSnippet, name);
         
         // TODO: use args

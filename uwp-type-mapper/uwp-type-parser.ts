@@ -20,11 +20,11 @@ export interface DelegateTypeNotation {
 }
 export interface FunctionSignature {
     description: string;
-    parameters: DescriptedKeyTypePair[];
+    parameters: DescribedKeyTypePair[];
     return: "instance" | TypeNotation;
     codeSnippet: string;
 }
-export interface DescriptedKeyTypePair {
+export interface DescribedKeyTypePair {
     description: string;
     type: string;
     key: string;
@@ -34,6 +34,11 @@ export interface EventTypeNotation {
     description: string;
     type: "event";
     delegate: string;
+}
+export interface StructureTypeNotation {
+    description: string;
+    type: "structure";
+    members: DescribedKeyTypePair[];
 }
 
 export default async function parse() {
@@ -50,6 +55,19 @@ export default async function parse() {
 }
 
 async function parseAsMap() {
+    /*
+    TODO: This function should ultimately return fully formatted JSON object:
+    {
+        "documentType": "namespace",
+        "syntax": {
+            "codeSnippets": {
+                "JavaScript": "...",
+                "C++": "..."
+            }
+        },
+        // ...
+    }
+    */
     let referenceMap = new Map<string, TypeNotation>();
 
     let referencepath = "../referencedocs";
@@ -202,7 +220,8 @@ async function parseAsMap() {
                 let signature = {
                     description,
                     parameters: undefined,
-                    return: "instance"
+                    return: "instance",
+                    codeSnippet: undefined
                 } as FunctionSignature;
 
                 let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Parameters"))[0];
@@ -318,18 +337,56 @@ async function parseAsMap() {
                     delegate
                 } as EventTypeNotation);
             }
-            else if (title.endsWith(" structure") || title.endsWith(" interface")) {
-                if (categoryJs) {
-                    continue; // Is there any JS-targeted document? 
-                    /*
-                    There is (are): https://msdn.microsoft.com/en-us/library/windows/apps/windows.foundation.rect.aspx
-                    Parsing this will not be used on mapping, how can it be used to generate d.ts?
-                    Manually point and add them?
-                    */
+            else if (title.endsWith(" structure")) {
+                /*
+                There is (are): https://msdn.microsoft.com/en-us/library/windows/apps/windows.foundation.rect.aspx
+                Parsing this will not be used on mapping, how can it be used to generate d.ts?
+                Manually point and add them?
+                
+                Namespace should reference them so that mapper can know
+                */
+                let notation = {
+                    description,
+                    type: "structure",
+                    members: []
+                } as StructureTypeNotation;
+
+                let membersHeader2 = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Members"))[0];
+                let tableOrList = membersHeader2.nextElementSibling.nextElementSibling;
+                let table: HTMLTableElement;
+                if (tableOrList.tagName === "UL") {
+                    // Rich structure (not in JS)
+                    let before = Array.from(mainSection.querySelectorAll("h3")).filter((h3) => h3.textContent.trim().startsWith("Fields"))[0];
+                    table = before.nextElementSibling.nextElementSibling as HTMLTableElement;
                 }
-                else {
+                else if (tableOrList.tagName === "TABLE") {
+                    table = tableOrList as HTMLTableElement;
+                }
+                else if (tableOrList.tagName !== "H2" /* next header */) {
+                    throw new Error("Unexpected element type after Members header");
+                }
+
+                if (!table) {
+                    // empty structure (will be written as 'any' later")
+                    referenceMap.set(helpId, notation);
                     continue;
                 }
+
+                let rows = Array.from(table.rows).slice(1) as HTMLTableRowElement[];
+                for (let row of rows) {
+                    let memberName = parseMemberName(row.children[0] as HTMLTableColElement);
+                    let memberType = exportJavaScriptTypeNotation(parseTypeNotationElement((row.children[1] as HTMLTableColElement).children[0] as HTMLParagraphElement, true));
+                    let memberDescription = row.children[2].textContent.trim();
+                    notation.members.push({
+                        description: memberDescription,
+                        key: memberName[1],
+                        type: memberType
+                    });
+                }
+                referenceMap.set(helpId, notation);
+            }
+            else if (title.endsWith(" interface")) {
+                continue;
             }
             else if (title.endsWith(" constructors") || title.endsWith(" methods") || title === "Content Removed") {
                 continue; // Do not parse meta pages
@@ -376,8 +433,8 @@ async function parseAsMap() {
         return `${base}.on${shortName}`
     }
 
-    function parseParameterList(listElement: HTMLDListElement): DescriptedKeyTypePair[] {
-        let parameters: DescriptedKeyTypePair[] = [];
+    function parseParameterList(listElement: HTMLDListElement): DescribedKeyTypePair[] {
+        let parameters: DescribedKeyTypePair[] = [];
         let childItems = Array.from(listElement.children) as HTMLElement[];
 
         let parameterName: string;
@@ -552,6 +609,14 @@ async function parseAsMap() {
                 return [text];
             }
         }
+    }
+
+    function parseMemberName(element: HTMLElement) {
+        let names = Array.from(element.getElementsByTagName("strong"));
+        if (names.length !== 2) {
+            throw new Error("Unexpected name numbers");
+        }
+        return names.map((strong) => strong.textContent.trim());
     }
 
     function exportJavaScriptTypeNotation(notation: string | Map<string, string>) {
