@@ -20,10 +20,11 @@ export interface DelegateTypeNotation {
 }
 export interface FunctionSignature {
     description: string;
-    parameters: FunctionParameter[];
+    parameters: DescriptedKeyTypePair[];
     return: "instance" | TypeNotation;
+    codeSnippet: string;
 }
-export interface FunctionParameter {
+export interface DescriptedKeyTypePair {
     description: string;
     type: string;
     key: string;
@@ -87,10 +88,11 @@ async function parseAsMap() {
                 continue; // Do not parse XAML API
             }
             // TODO: use target language meta tag? it can only be used with VS document
-            let mainSection = doc.body.querySelector("div#mainSection");
+            let mainSection = doc.body.querySelector("div#mainSection") as HTMLDivElement;
             let mainContent = mainSection.textContent
             let description = inline(mainContent.slice(0, mainContent.search(/\sSyntax\s/)))
             let title = doc.body.querySelector("div.title").textContent.trim();
+
             if (title.endsWith(" class") || title.endsWith(" attribute")) {
                 // https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.background.smartcardtrigger.aspx
 
@@ -223,10 +225,14 @@ async function parseAsMap() {
             }
             else if (title.endsWith(" method")) {
                 let signature = {
-                    description,
-                    parameters: undefined,
-                    return: undefined
+                    description
                 } as FunctionSignature;
+
+                let codeSnippetText = extractSyntaxCodeSnippets(mainSection).get("JavaScript")
+                if (codeSnippetText == null) {
+                    throw new Error("No JS code snippet");
+                }
+                signature.codeSnippet = codeSnippetText;
 
                 let parentheses = parenthesisRegex.exec(helpId);
                 if (parentheses) {
@@ -279,26 +285,15 @@ async function parseAsMap() {
             else if (title.endsWith(" event")) {
                 // Example URL: https://msdn.microsoft.com/en-us/library/windows/apps/windows.media.capture.core.variablephotosequencecapture.photocaptured.aspx
 
-                let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Syntax"))[0];
-                let codesnippetElement = before.nextElementSibling;
-                let codesnippetText: string;
-                while (codesnippetElement.tagName === "CODESNIPPET") {
-                    if (codesnippetElement.getAttribute("language") === "JavaScript") {
-                        codesnippetText = codesnippetElement.textContent;
-                        break;
-                    }
-                    codesnippetElement = codesnippetElement.nextElementSibling;
+                let codeSnippetText = extractSyntaxCodeSnippets(mainSection).get("JavaScript")
+                if (codeSnippetText == null) {
+                    throw new Error("No JS code snippet");
                 }
 
-                if (!codesnippetText) {
-                    // JS incompatible
-                    continue;
-                }
+                let eventListener = codeSnippetText.match(eventListenerRegex);
+                let onevent = codeSnippetText.match(oneventRegex);
 
-                let eventListener = codesnippetText.match(eventListenerRegex);
-                let onevent = codesnippetText.match(oneventRegex);
-
-                before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Event information"))[0];
+                let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Event information"))[0];
                 let table = before.nextElementSibling as HTMLTableElement;
                 let rows = Array.from(table.rows) as HTMLTableRowElement[];
                 if (rows.length > 1) {
@@ -326,6 +321,11 @@ async function parseAsMap() {
             else if (title.endsWith(" structure") || title.endsWith(" interface")) {
                 if (categoryJs) {
                     continue; // Is there any JS-targeted document? 
+                    /*
+                    There is (are): https://msdn.microsoft.com/en-us/library/windows/apps/windows.foundation.rect.aspx
+                    Parsing this will not be used on mapping, how can it be used to generate d.ts?
+                    Manually point and add them?
+                    */
                 }
                 else {
                     continue;
@@ -346,6 +346,25 @@ async function parseAsMap() {
 
     return referenceMap;
 
+    function extractSyntaxCodeSnippets(mainSection: HTMLDivElement) {
+        let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Syntax"))[0];
+        let snippetMap = new Map<string, string>();
+        if (!before) {
+            return snippetMap;
+        }
+
+        let codesnippetElement = before.nextElementSibling;
+        while (codesnippetElement && codesnippetElement.tagName === "CODESNIPPET") {
+            let language = codesnippetElement.getAttribute("language")
+            if (!language) {
+                throw new Error("CODESNIPPET element does not have 'language' attribute");
+            }
+            snippetMap.set(language, codesnippetElement.textContent);
+
+            codesnippetElement = codesnippetElement.nextElementSibling;
+        }
+        return snippetMap;
+    }
     function addOnPrefixOnHelpId(helpId: string) {
         let lastDotIndex = helpId.lastIndexOf(".");
         if (lastDotIndex === -1) {
@@ -357,8 +376,8 @@ async function parseAsMap() {
         return `${base}.on${shortName}`
     }
 
-    function parseParameterList(listElement: HTMLDListElement): FunctionParameter[] {
-        let parameters: FunctionParameter[] = [];
+    function parseParameterList(listElement: HTMLDListElement): DescriptedKeyTypePair[] {
+        let parameters: DescriptedKeyTypePair[] = [];
         let childItems = Array.from(listElement.children) as HTMLElement[];
 
         let parameterName: string;
@@ -372,8 +391,6 @@ async function parseAsMap() {
                     // No JS type
                     return;
                 }
-                
-                // TODO: Fix "out parameter" problem https://msdn.microsoft.com/en-us/library/windows/apps/windows.networking.servicediscovery.dnssd.dnssdserviceinstancecollection.indexof.aspx
 
                 let parameterDescription: string;
                 if (child.children[1]) {
