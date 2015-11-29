@@ -4,7 +4,7 @@ import parse from "./uwp-type-parser"
 import {
 TypeNotation,
 FunctionTypeNotation,
-FunctionParameter,
+DescriptedKeyTypePair,
 FunctionSignature,
 DelegateTypeNotation,
 EventTypeNotation
@@ -18,8 +18,18 @@ import * as fspromise from "./fspromise"
 
 main().catch((err) => console.error(err));
 
+interface InterfaceLiteralTypeNotation {
+    description: ""; // describe in key-type pair array
+    type: "interfaceliteral"
+    members: DescriptedKeyTypePair[];
+}
 
-export interface FunctionDescription extends TypeDescription { __type: "function" | "callback"; __signatures: FunctionSignature[]; }
+interface ExtendedFunctionSignature extends FunctionSignature {
+    return: "instance" | TypeNotation | InterfaceLiteralTypeNotation;
+}
+
+interface FunctionDescription extends TypeDescription { __type: "function" | "callback"; __signatures: ExtendedFunctionSignature[]; }
+
 
 
 async function main() {
@@ -248,10 +258,11 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
         else {
             if (member.__type === "function") {
                 for (let signature of (member as FunctionDescription).__signatures) {
+                    signature = normalizeSignature(signature, memberName);
                     // TODO: description for parameters
                     result += indent + `/** ${signature.description} */\r\n`;
                     result += indent + `${prefix}${memberName}(${writeParameters(signature)}): `;
-                    let returnType = signature.return ? normalizeTypeName((signature.return as TypeNotation).type) : "void";
+                    let returnType = writeReturnType(signature);
                     if (returnType !== "unknown") {
                         result += `${returnType};`;
                     }
@@ -281,6 +292,32 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
             parameterArray.push(`${key}: ${normalizeTypeName(parameter.type)}`);
         }
         return parameterArray.join(', ');
+    }
+    function writeReturnType(signature: FunctionSignature) {
+        let signatureReturn = signature.return;
+        if (!signatureReturn) {
+            return "void";
+        }
+
+        if (typeof signatureReturn === "string") {
+            throw new Error("Unexpected string return type"); // only in class constructor
+        }
+        else {
+            if (signatureReturn.type === "interfaceliteral") {
+                let members = (signatureReturn as InterfaceLiteralTypeNotation).members;
+                let interfaceLiteralContent = members.map((member) => {
+                    let memberNotation = `${member.key}: ${normalizeTypeName(member.type)}`;
+                    if (member.description) {
+                        memberNotation = `/** ${member.description} */ ${memberNotation}`;
+                    }
+                    return memberNotation;
+                }).join("; ");
+                return `{ ${interfaceLiteralContent} }`;
+            }
+            else {
+                return normalizeTypeName(signatureReturn.type);
+            }
+        }
     }
 
 
@@ -312,6 +349,77 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
         }
 
         return typeName;
+    }
+
+    function normalizeSignature(signature: FunctionSignature, name: string) {
+        let newSignature = {
+            description: signature.description,
+            parameters: []
+        } as FunctionSignature;
+        let outParameters: DescriptedKeyTypePair[] = [];
+        let codeSnippetArgs = extractCallArguments(signature.codeSnippet, name);
+        
+        // TODO: use args
+        for (let i = 0; i < signature.parameters.length; i++) {
+            let parameter = signature.parameters[i];
+            let arg = codeSnippetArgs[i];
+            
+            let markedAsOut = false;
+            if (parameter.key.endsWith(" (out parameter)")) {
+                markedAsOut = true;
+                parameter.key = parameter.key.slice(0, -16).trim();
+            }
+
+            if (parameter.key !== arg) {
+                if (markedAsOut) {
+                    outParameters.push(parameter);
+                }
+                else {
+                    throw new Error("Unexpected parameter mismatch");
+                }
+            }
+            else {
+                newSignature.parameters.push(parameter);
+            }
+        }
+
+        if (outParameters.length === 0) {
+            newSignature.return = signature.return;
+            return newSignature;
+        }
+        else if (outParameters.length === 1 && !signature.return) {
+            let outAsReturn = outParameters[0];
+            newSignature.return = {
+                description: outAsReturn.description,
+                type: outAsReturn.type
+            } as TypeNotation;
+            return newSignature;
+        }
+        else {
+            if (signature.return) {
+                outParameters.push({
+                    description: signature.description,
+                    key: "returnValue",
+                    type: (signature.return as TypeNotation).type
+                });
+            }
+            newSignature.return = {
+                description: "",
+                type: "interfaceliteral",
+                members: outParameters
+            } as InterfaceLiteralTypeNotation;
+            return newSignature;
+        }
+    }
+    function extractCallArguments(codeSnippet: string, functionName: string) {
+        let callSyntaxRegex = new RegExp(`${functionName}\\(([^\\)]*)\\)`);
+        let callSyntax = codeSnippet.match(callSyntaxRegex);
+        if (callSyntax) {
+            return callSyntax[1].split(', ');
+        }
+        else {
+            throw new Error("Cannot find function call inside code snippet");
+        }
     }
 }
 
