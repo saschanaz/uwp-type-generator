@@ -108,7 +108,7 @@ async function parseAsMap() {
             // TODO: use target language meta tag? it can only be used with VS document
             let mainSection = doc.body.querySelector("div#mainSection") as HTMLDivElement;
             let mainContent = mainSection.textContent
-            let description = inline(mainContent.slice(0, mainContent.search(/\sSyntax\s/)))
+            let description = getFirstParagraphText(mainSection.firstElementChild, "H2");
             let title = doc.body.querySelector("div.title").textContent.trim();
 
             if (title.endsWith(" class") || title.endsWith(" attribute")) {
@@ -120,9 +120,7 @@ async function parseAsMap() {
                 } as TypeNotation);
             }
             else if (title.endsWith(" enumeration")) {
-                /*
-                TODO: parse member descriptions
-                */
+                // Example URL: https://msdn.microsoft.com/en-us/library/windows/apps/windows.devices.pointofservice.posprintercartridgesensors.aspx
 
                 referenceMap.set(helpId, {
                     description,
@@ -143,7 +141,7 @@ async function parseAsMap() {
                     let descCol = row.children[2] as HTMLTableColElement;
                     if (nameCol.children.length > 1) {
                         referenceMap.set(`${helpId}.${nameCol.children[1].textContent.trim().toLowerCase()}`, {
-                            description: inline(descCol.textContent),
+                            description: getFirstParagraphText(descCol.firstElementChild),
                             type: "Number"
                         });
                     }
@@ -403,6 +401,15 @@ async function parseAsMap() {
 
     return referenceMap;
 
+    function getFirstParagraphText(element: Element, beforeElement?: string) {
+        let nextElement = element;
+        while (nextElement && nextElement.tagName !== beforeElement) {
+            if (nextElement.tagName === "P") {
+                return inline(nextElement.textContent.trim());
+            }
+            nextElement = nextElement.nextElementSibling;
+        }
+    }
     function extractSyntaxCodeSnippets(mainSection: HTMLDivElement) {
         let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Syntax"))[0];
         let snippetMap = new Map<string, string>();
