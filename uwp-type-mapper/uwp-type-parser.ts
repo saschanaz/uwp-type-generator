@@ -195,42 +195,16 @@ async function parseAsMap() {
                         }
                     }
                 }
-                else if (result.subheaders["In this section"]) {
-                    // Example URL: https://msdn.microsoft.com/en-us/library/windows/apps/windows.graphics.display.aspx
-                    let inThisSection = result.subheaders["In this section"];
-
-                    let table = inThisSection.children[0];
-                    if (table.tagName !== "TABLE") {
-                        throw new Error(`Expected TABLE element but found ${table.tagName}`);
-                    }
-
-                    let cellRows = dombox.packByCellMatrix(table as HTMLTableElement);
-                    if (cellRows.length < 1) {
-                        throw new Error(`Expected 2+ row table but found ${cellRows.length} rows.`);
-                    }
-
-                    cellRows = cellRows.slice(1);
-                    for (let row of cellRows) {
-                        let paragraph = row[0].children[0] as HTMLParagraphElement;
-                        if (paragraph.tagName !== "P") {
-                            throw new Error(`Expected wrapping paragraph but found ${paragraph.tagName}`);
-                        }
-
-                        let anchor = paragraph.children[0];
-                        if (anchor.tagName !== "A") {
-                            throw new Error(`Expected anchored reference but found ${anchor.tagName}`);
-                        }
-
-                        if (anchor.textContent.trim().endsWith(" structure")) {
-                            notation.members.structures.push((anchor as HTMLAnchorElement).href.slice(mshelppath.length));
-                        }
-                    }
-                }
                 else {
-                    // Header 'Members' or 'In this section' are expected but neither are found
-                    // Example URL: https://msdn.microsoft.com/en-us/library/windows/apps/windows.devices.pointofservice.aspx
-
-                    let table = result.children[result.children.length - 2]; // penultimate element
+                    let table: HTMLTableElement;
+                    if (result.subheaders["In this section"]) {
+                        // Example URL: https://msdn.microsoft.com/en-us/library/windows/apps/windows.graphics.display.aspx
+                        table = result.subheaders["In this section"].children[0] as HTMLTableElement;
+                    }
+                    else {
+                        // Example URL: https://msdn.microsoft.com/en-us/library/windows/apps/windows.devices.pointofservice.aspx
+                        table = result.children[result.children.length - 2] as HTMLTableElement;
+                    }
                     if (table.tagName !== "TABLE") {
                         throw new Error(`Expected TABLE element but found ${table.tagName}`);
                     }
@@ -242,7 +216,10 @@ async function parseAsMap() {
 
                     cellRows = cellRows.slice(1);
                     for (let row of cellRows) {
-                        let anchor = row[0].children[0];
+                        let anchor = row[0].children[0] as HTMLAnchorElement;
+                        if (anchor.tagName === "P") {
+                            anchor = anchor.children[0] as HTMLAnchorElement;
+                        }
                         if (anchor.tagName !== "A") {
                             throw new Error(`Expected anchored reference but found ${anchor.tagName}`);
                         }
