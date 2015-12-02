@@ -164,6 +164,8 @@ function map(parentIteration: TypeDescription, docs: any) {
 
                     if (hasEventCallback((item as ClassDescription).prototype)) {
                         (item as ClassDescription).__eventTarget = true;
+                        delete (item as ClassDescription).prototype["addEventListener"];
+                        delete (item as ClassDescription).prototype["removeEventListener"];
                     }
                 }
             }
@@ -194,7 +196,7 @@ function map(parentIteration: TypeDescription, docs: any) {
                 continue;
             }
             let item = iteration[itemName] as TypeNameOrDescription;
-            if ((item as TypeDescription).__type === "callback") {
+            if ((item as TypeDescription).__type === "event") {
                 return true;
             }
         }
