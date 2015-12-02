@@ -235,7 +235,7 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
             //    throw new Error("Unexpected iteration type");
             //}
         }
-        else if (iteration.__type === "structure") {
+        else if (iteration.__type === "structure" || iteration.__type === "namespace") {
             result += initialIndent + `namespace ${iterationName} {\r\n`
             for (let itemName in iteration) {
                 if ((itemName as string).startsWith("__")) {
@@ -363,21 +363,27 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
         else {
             if (signatureReturn.type === "interfaceliteral") {
                 let members = (signatureReturn as InterfaceLiteralTypeNotation).members;
-                let interfaceLiteralContent = members.map((member) => {
-                    let memberNotation = `${member.key}: ${normalizeTypeName(member.type)}`;
-                    if (member.description) {
-                        memberNotation = `/** ${member.description} */ ${memberNotation}`;
-                    }
-                    return memberNotation;
-                }).join("; ");
-                return `{ ${interfaceLiteralContent} }`;
+                return `{ ${members.map((member) => writeInlineProperty(member)).join(" ")} }`;
             }
             else {
                 return normalizeTypeName(signatureReturn.type);
             }
         }
     }
-    function writeInterfaceLiteralBody(notation: any) {
+    function writeLineBrokenProperty(indentRepeat: number, property: DescribedKeyTypePair) {
+        let indent = repeatIndent(indentBase, indentRepeat);
+        let result = indent + `${property.key}: ${normalizeTypeName(property.type)};`;
+        if (property.description) {
+            result += `${indent}/** ${property.description} */\r\n${result}`;
+        }
+        return result;
+    }
+    function writeInlineProperty(property: DescribedKeyTypePair) {
+        let result = `${property.key}: ${normalizeTypeName(property.type)};`;
+        if (property.description) {
+            result = `/** ${property.description} */ ${result}`;
+        }
+        return result;
     }
 
 
