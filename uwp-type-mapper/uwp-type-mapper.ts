@@ -43,6 +43,11 @@ async function main() {
         throw new Error("Output file path is not specified.");
     }
 
+    if (!(await fspromise.exists("supplies/prepend.d.ts"))) {
+        throw new Error("Expected supplies/prepend.d.ts file but the path is not found");
+    }
+    let prepend = await fspromise.readFile("supplies/prepend.d.ts");
+
     console.log("Loading documentations...");
     let docs = await loadDocs("--force-reparse" in args)
     console.log("Loading iteration file...");
@@ -56,8 +61,9 @@ async function main() {
         console.log("Storing mapped iteration file...");
         await fspromise.writeFile(args["-mapout"], JSON.stringify(iterations, null, 2));
     }
+
     console.log("Storing result d.ts file...");
-    await fspromise.writeFile(args["-o"], writeAsDTS(iterations, "Windows"));
+    await fspromise.writeFile(args["-o"], prepend + "\r\n" + writeAsDTS(iterations, "Windows"));
 
     console.log("Finished.");
     process.exit();
@@ -299,6 +305,11 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
             result += writeClassMemberLines(indentRepeat + 1, prototype[itemName] as TypeNameOrDescription, itemName);
         }
 
+        if (constructor.__eventTarget) {
+            result += `${nextLevelIndent}addEventListener(type: string, listener: EventListenerOrEventListenerObject): void;\r\n`;
+            result += `${nextLevelIndent}removeEventListener(type: string, listener: EventListenerOrEventListenerObject): void;\r\n`;
+        }
+
         result += initialIndent + '}';
         return result;
     }
@@ -334,7 +345,14 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
                 return result;
             }
             else if (member.__type === "event") {
-                let result = "";
+                let delegate = (member as EventDescription).__delegate;
+                let callbackString = `(ev: ${normalizeTypeName(delegate)}) => any`;
+                let result = `${indent}${memberName}: ${callbackString};\r\n`;
+                result += `${indent}addEventListener(type: "${memberName.slice(2)}", listener: ${callbackString}): void;\r\n`;
+                result += `${indent}removeEventListener(type: "${memberName.slice(2)}", listener: ${callbackString}): void;\r\n`;
+                if (member.__description) {
+                    result = `${indent}/** ${member.__description} */\r\n${result}`;
+                }
                 return result;
             }
             else {
@@ -415,6 +433,9 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
         }
         else if (typeName === "Object") {
             typeName = "any";
+        }
+        else if (typeName === "System.String") {
+            typeName = "string";
         }
         else {
             let backtickIndex = typeName.indexOf("`");
