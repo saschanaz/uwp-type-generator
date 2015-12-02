@@ -7,7 +7,9 @@ FunctionTypeNotation,
 DescribedKeyTypePair,
 FunctionSignature,
 DelegateTypeNotation,
-EventTypeNotation
+EventTypeNotation,
+NamespaceDocumentNotation,
+StructureTypeNotation
 } from "./uwp-type-parser";
 import {
 ClassDescription,
@@ -19,7 +21,7 @@ import * as fspromise from "./fspromise"
 main().catch((err) => console.error(err));
 
 interface InterfaceLiteralTypeNotation {
-    description: ""; // describe in key-type pair array
+    description: string;
     type: "interfaceliteral"
     members: DescribedKeyTypePair[];
 }
@@ -28,9 +30,9 @@ interface ExtendedFunctionSignature extends FunctionSignature {
     return: "instance" | TypeNotation | InterfaceLiteralTypeNotation;
 }
 
-interface FunctionDescription extends TypeDescription { __type: "function" | "callback"; __signatures: ExtendedFunctionSignature[]; }
-
-
+interface FunctionDescription extends TypeDescription { __type: "function"; __signatures: ExtendedFunctionSignature[]; }
+interface EventDescription extends TypeDescription { __type: "event"; __delegate: string; }
+interface NamespaceDescription extends TypeDescription { __type: "namespace"; __interfaces: InterfaceLiteralTypeNotation[] }
 
 async function main() {
     let args = parseArgs();
@@ -61,84 +63,128 @@ async function main() {
     process.exit();
 }
 
-function map(iteration: TypeDescription, docs: any) {
-    for (let itemName in iteration) {
-        if ((itemName as string).startsWith("__")) {
-            continue;
-        }
+function map(parentIteration: TypeDescription, docs: any) {
+    /*
+    interface mapping?
 
-        let item = iteration[itemName] as TypeNameOrDescription;
-        if (typeof item === "string") {
-            let fullName = `${iteration.__fullname}.${itemName}`.toLowerCase();
+    create a map 
+    namespace -> structures -> map.set(structureName, namespace)
+    create a set
+    signatures -> map.set(typeName);
 
-            let doc = docs[fullName] as TypeNotation;
-            if (!doc) {
+    for referenced typename: if map.has(typeName) then namespace[typeName] = interfaceLiteralDescription;
+    */
+
+    let interfaceParentNamespaceMap = new Map<string, NamespaceDescription>();
+    let typeReferenceSet = new Set<string>();
+    mapItem(parentIteration);
+
+    function mapItem(iteration: TypeDescription) {
+        for (let itemName in iteration) {
+            if ((itemName as string).startsWith("__")) {
                 continue;
             }
 
-            switch (doc.type) {
-                case "class":
-                    break;
-                case "enumeration":
-                    break;
-                case "namespace":
-                    break;
-                case "delegate":
-                    break;
-                case "function":
-                    /*
-                    TODO: interfaces from parser and iterator are too different, should be integrated
-                    TypeDescription does not have members for function signatures
-                    */
-                    iteration[itemName] = {
-                        __fullname: fullName,
-                        __type: "function",
-                        __description: doc.description,
-                        __signatures: (doc as FunctionTypeNotation).signatures
-                    } as FunctionDescription;
-                    break;
-                case "event":
-                    /*
-                    TODO: methods and onevents must be distingushable (by __type?)
-                    Do FunctionDescription have to allow "function"|"?" <- What name? callback?
-                     */
-                    iteration[itemName] = {
-                        __fullname: fullName,
-                        __type: "callback",
-                        __description: doc.description,
-                        __signatures: (doc as FunctionTypeNotation).signatures
-                    } as FunctionDescription;
-                    break;
-                default: {
-                    iteration[itemName] = {
-                        __fullname: fullName,
-                        __type: doc.type,
-                        __description: doc.description
-                    } as TypeDescription;
-                    break;
+            let item = iteration[itemName] as TypeNameOrDescription;
+            if (typeof item === "string") {
+                let fullName = `${iteration.__fullname}.${itemName}`.toLowerCase();
+
+                let doc = docs[fullName] as TypeNotation;
+                if (!doc) {
+                    continue;
+                }
+
+                switch (doc.type) {
+                    case "class":
+                        break;
+                    case "enumeration":
+                        break;
+                    case "namespace":
+                        break;
+                    case "delegate":
+                        break;
+                    case "function":
+                        /*
+                        TODO: interfaces from parser and iterator are too different, should be integrated
+                        TypeDescription does not have members for function signatures
+                        */
+                        iteration[itemName] = {
+                            __fullname: fullName,
+                            __type: "function",
+                            __description: doc.description,
+                            __signatures: rememberReferencedTypes((doc as FunctionTypeNotation).signatures)
+                        } as FunctionDescription;
+                        break;
+                    case "event":
+                        /*
+                        TODO: methods and onevents must be distingushable (by __type?)
+                        Do FunctionDescription have to allow "function"|"?" <- What name? callback?
+                         */
+                        iteration[itemName] = {
+                            __fullname: fullName,
+                            __type: "event",
+                            __description: doc.description,
+                            __delegate: (doc as EventTypeNotation).delegate
+                        } as EventDescription;
+                        break;
+                    default: {
+                        iteration[itemName] = {
+                            __fullname: fullName,
+                            __type: doc.type,
+                            __description: doc.description
+                        } as TypeDescription;
+                        break;
+                    }
+                }
+            }
+            else {
+                let fullName = item.__fullname.toLowerCase();
+                let doc = docs[fullName] as TypeNotation;
+                if (doc) {
+                    item.__description = doc.description;
+                }
+
+                if (item.__type === "structure") {
+                    if (doc) {
+                        if (doc.type === "enumeration") {
+                            item.__type = doc.type;
+                        }
+                        else if (doc.type === "namespace") {
+                            item.__type = doc.type;
+                            (item as NamespaceDescription).__interfaces = [];
+                            for (let structure of (doc as NamespaceDocumentNotation).members.structures) {
+                                interfaceParentNamespaceMap.set(structure, item as NamespaceDescription);
+                            }
+                        }
+                    }
+                    mapItem(item);
+                }
+                else if (item.__type === "class") {
+                    mapItem(item);
+
+                    if (hasEventCallback((item as ClassDescription).prototype)) {
+                        (item as ClassDescription).__eventTarget = true;
+                    }
                 }
             }
         }
-        else {
-            let fullName = item.__fullname.toLowerCase();
-            let doc = docs[fullName] as TypeNotation;
-            if (doc) {
-                item.__description = doc.description;
-            }
+    }
 
-            if (item.__type === "structure") {
-                if (doc && doc.type === "enumeration") {
-                    item.__type = doc.type;
-                }
-                map(item, docs);
-            }
-            else if (item.__type === "class") {
-                map(item, docs);
-
-                if (hasEventCallback((item as ClassDescription).prototype)) {
-                    (item as ClassDescription).__eventTarget = true;
-                }
-            }
+    for (let typeReference of typeReferenceSet) {
+        let doc = docs[typeReference.toLowerCase()] as TypeNotation;
+        if (!doc) {
+            continue;
+        }
+        let parentNamespace = interfaceParentNamespaceMap.get(typeReference);
+        if (!parentNamespace) {
+            continue;
+        }
+        if (doc.type === "structure") {
+            parentNamespace.__interfaces.push({
+                description: doc.description,
+                type: "interfaceliteral",
+                members: (doc as StructureTypeNotation).members
+            })
         }
     }
 
@@ -153,6 +199,18 @@ function map(iteration: TypeDescription, docs: any) {
             }
         }
         return false;
+    }
+
+    function rememberReferencedTypes(signatures: FunctionSignature[]) {
+        for (let signature of signatures) {
+            for (let parameter of signature.parameters) {
+                typeReferenceSet.add(parameter.type);
+            }
+            if (signature.return && typeof signature.return !== "string") {
+                typeReferenceSet.add((signature.return as TypeNotation).type);
+            }
+        }
+        return signatures;
     }
 }
 
@@ -319,6 +377,8 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
             }
         }
     }
+    function writeInterfaceLiteralBody(notation: any) {
+    }
 
 
     function normalizeTypeName(typeName: string) {
@@ -363,7 +423,7 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
         for (let i = 0; i < signature.parameters.length; i++) {
             let parameter = signature.parameters[i];
             let arg = codeSnippetArgs[i];
-            
+
             let markedAsOut = false;
             if (parameter.key.endsWith(" (out parameter)")) {
                 markedAsOut = true;
