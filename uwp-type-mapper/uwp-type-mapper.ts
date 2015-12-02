@@ -222,47 +222,47 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
     function write(indentRepeat: number, iteration: TypeNameOrDescription, iterationName: string) {
         let initialIndent = repeatIndent(indentBase, indentRepeat);
         let nextLevelIndent = initialIndent + indentBase;
-        let result = "";
 
         if (typeof iteration === "string") {
             if (iteration === "unknown") {
-                result += initialIndent + `var ${iterationName}: any; /* unmapped type */\r\n`;
+                return `${initialIndent}var ${iterationName}: any; /* unmapped type */\r\n`;
             }
             else if (iteration === "undefined") {
-                result += initialIndent + `var ${iterationName}: void;\r\n`;
+                return `${initialIndent}var ${iterationName}: void;\r\n`;
             }
             //else {
             //    throw new Error("Unexpected iteration type");
             //}
         }
         else if (iteration.__type === "structure" || iteration.__type === "namespace") {
-            result += initialIndent + `namespace ${iterationName} {\r\n`
+            let result = `${initialIndent}namespace ${iterationName} {\r\n`
             for (let itemName in iteration) {
                 if ((itemName as string).startsWith("__")) {
                     continue;
                 }
                 result += write(indentRepeat + 1, iteration[itemName], itemName);
             }
-            result += initialIndent + '}\r\n';
+            result += `${initialIndent}}\r\n`;
+            return result;
         }
         else if (iteration.__type === "enumeration") {
-            result += initialIndent + `enum ${iterationName} {\r\n`;
+            let result = `${initialIndent}enum ${iterationName} {\r\n`;
             for (let itemName in iteration) {
                 if ((itemName as string).startsWith("__")) {
                     continue;
                 }
                 let item = iteration[itemName] as TypeDescription;
                 if (item.__description) {
-                    result += nextLevelIndent + `/** ${item.__description} */\r\n`;
+                    result += `${nextLevelIndent}/** ${item.__description} */\r\n`;
                 }
-                result += nextLevelIndent + `${itemName},\r\n`;
+                result += `${nextLevelIndent}${itemName},\r\n`;
             }
-            result += initialIndent + '}\r\n';
+            result += `${initialIndent}}\r\n`;
+            return result;
         }
         else if (iteration.__type === "class") {
-            result += `${writeClass(indentRepeat, iteration as ClassDescription, iterationName)}\r\n`;
+            return `${writeClass(indentRepeat, iteration as ClassDescription, iterationName)}\r\n`;
         }
-        return result;
     }
 
 
@@ -302,12 +302,11 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
     }
     function writeClassMemberLines(indentRepeat: number, member: TypeNameOrDescription, memberName: string, asStatic?: boolean) {
         let indent = repeatIndent(indentBase, indentRepeat);
-        let result = "";
         let prefix = asStatic ? "static " : "";
 
         if (typeof member === "string") {
             if (member === "unknown") {
-                result += indent + `${prefix}${memberName}: any; /* unmapped type */\r\n`;
+                return `${indent}${prefix}${memberName}: any; /* unmapped type */\r\n`;
             }
             else {
                 throw new Error("Unexpected class member type");
@@ -315,11 +314,12 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
         }
         else {
             if (member.__type === "function") {
+                let result = "";
                 for (let signature of (member as FunctionDescription).__signatures) {
                     signature = normalizeSignature(signature, memberName);
                     // TODO: description for parameters
-                    result += indent + `/** ${signature.description} */\r\n`;
-                    result += indent + `${prefix}${memberName}(${writeParameters(signature)}): `;
+                    result += `${indent}/** ${signature.description} */\r\n`;
+                    result += `${indent}${prefix}${memberName}(${writeParameters(signature)}): `;
                     let returnType = writeReturnType(signature);
                     if (returnType !== "unknown") {
                         result += `${returnType};`;
@@ -329,9 +329,20 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
                     }
                     result += "\r\n";
                 }
+                return result;
+            }
+            else if (member.__type === "event") {
+                let result = "";
+                return result;
+            }
+            else {
+                let result = `${indent}${prefix}${memberName}: ${normalizeTypeName(member.__type)};\r\n`
+                if (member.__description) {
+                    result = `${indent}/** ${member.__description} */\r\n${result}`;
+                }
+                return result;
             }
         }
-        return result;
     }
     function repeatIndent(indent: string, repeat: number) {
         let result = "";
