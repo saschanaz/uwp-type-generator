@@ -42,6 +42,7 @@
   <ItemGroup>
     <TypeScriptCompile Include="declarations\jsdom.d.ts" />
     <TypeScriptCompile Include="declarations\node.d.ts" />
+    <TypeScriptCompile Include="dombox.ts" />
     <TypeScriptCompile Include="fspromise.ts" />
     <TypeScriptCompile Include="uwp-type-mapper.ts" />
     <TypeScriptCompile Include="uwp-type-parser.ts" />
