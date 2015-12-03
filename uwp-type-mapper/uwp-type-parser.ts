@@ -22,6 +22,7 @@ export interface DelegateTypeNotation {
 export interface FunctionSignature {
     description: string;
     parameters: DescribedKeyTypePair[];
+    typeParameters: string[];
     return: "instance" | TypeNotation;
     codeSnippet: string;
 }
@@ -46,6 +47,7 @@ export interface NamespaceDocumentNotation {
     type: "namespace";
     members: {
         structures: string[];
+        delegates: string[];
     }
 }
 
@@ -85,6 +87,7 @@ async function parseAsMap() {
     let whitespaceRepeatRegex = /\s{1,}/g;
     let eventListenerRegex = /\w+\.addEventListener\(\"(\w+)\"\, \w+\)/;
     let oneventRegex = /\w+\.on(\w+) =/;
+    let genericsRegex = /<([^>]+)>$/;
     let files = await findAllHTMLFilePaths(referencepath);
     let skippedById: string[] = [];
 
@@ -164,7 +167,8 @@ async function parseAsMap() {
                     description,
                     type: "namespace",
                     members: {
-                        structures: []
+                        structures: [],
+                        delegates: []
                     }
                 } as NamespaceDocumentNotation;
                 let result = dombox.packByHeader(mainSection);
@@ -172,26 +176,21 @@ async function parseAsMap() {
                 if (result.subheaders["Members"]) {
                     let members = result.subheaders["Members"];
                     if (members.subheaders["Structures"]) {
-                        let structures = members.subheaders["Structures"];
-
-                        let table = structures.children[1];
+                        let table = members.subheaders["Structures"].children[1] as HTMLTableElement;
                         if (table.tagName !== "TABLE") {
                             throw new Error(`Expected TABLE element but found ${table.tagName}`);
                         }
-
-                        let cellRows = dombox.packByCellMatrix(table as HTMLTableElement);
-                        if (cellRows.length < 1) {
-                            throw new Error(`Expected 2+ row table but found ${cellRows.length} rows.`);
+                        for (let item of scanMemberTableItems(table)) {
+                            notation.members.structures.push(item.linkName);
                         }
-
-                        cellRows = cellRows.slice(1);
-
-                        for (let row of cellRows) {
-                            let anchor = row[0].children[0];
-                            if (anchor.tagName !== "A") {
-                                throw new Error(`Expected anchored reference but found ${anchor.tagName}`);
-                            }
-                            notation.members.structures.push((anchor as HTMLAnchorElement).href.slice(mshelppath.length));
+                    }
+                    if (members.subheaders["Delegates"]) {
+                        let table = members.subheaders["Delegates"].children[1] as HTMLTableElement;
+                        if (table.tagName !== "TABLE") {
+                            throw new Error(`Expected TABLE element but found ${table.tagName}`);
+                        }
+                        for (let item of scanMemberTableItems(table)) {
+                            notation.members.delegates.push(item.linkName);
                         }
                     }
                 }
@@ -208,24 +207,13 @@ async function parseAsMap() {
                     if (table.tagName !== "TABLE") {
                         throw new Error(`Expected TABLE element but found ${table.tagName}`);
                     }
-
-                    let cellRows = dombox.packByCellMatrix(table as HTMLTableElement);
-                    if (cellRows.length < 1) {
-                        throw new Error(`Expected 2+ row table but found ${cellRows.length} rows.`);
-                    }
-
-                    cellRows = cellRows.slice(1);
-                    for (let row of cellRows) {
-                        let anchor = row[0].children[0] as HTMLAnchorElement;
-                        if (anchor.tagName === "P") {
-                            anchor = anchor.children[0] as HTMLAnchorElement;
+                    
+                    for (let item of scanMemberTableItems(table)) {
+                        if (item.textContent.endsWith(" structure")) {
+                            notation.members.structures.push(item.linkName);
                         }
-                        if (anchor.tagName !== "A") {
-                            throw new Error(`Expected anchored reference but found ${anchor.tagName}`);
-                        }
-
-                        if (row[0].textContent.trim().endsWith(" structure")) {
-                            notation.members.structures.push((anchor as HTMLAnchorElement).href.slice(mshelppath.length));
+                        else if (item.textContent.endsWith(" delegate")) {
+                            notation.members.delegates.push(item.linkName);
                         }
                     }
                 }
@@ -256,6 +244,11 @@ async function parseAsMap() {
                     parameters: undefined,
                     return: undefined
                 } as FunctionSignature;
+
+                let typeParameterMatch = title.slice(0, -9).match(genericsRegex);
+                if (typeParameterMatch) { // generics
+                    signature.typeParameters = typeParameterMatch[1].split(', ');
+                }
 
                 let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Parameters"))[0];
                 let parameterListElement = before.nextElementSibling as HTMLDListElement;
@@ -294,7 +287,8 @@ async function parseAsMap() {
                     description,
                     parameters: undefined,
                     return: "instance",
-                    codeSnippet: undefined
+                    codeSnippet: undefined,
+                    typeParameters: undefined
                 } as FunctionSignature;
 
                 let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Parameters"))[0];
@@ -477,7 +471,25 @@ async function parseAsMap() {
     return referenceMap;
 
 
+    function* scanMemberTableItems(table: HTMLTableElement) {
+        let cellRows = dombox.packByCellMatrix(table as HTMLTableElement);
+        if (cellRows.length < 1) {
+            throw new Error(`Expected 2+ row table but found ${cellRows.length} rows.`);
+        }
 
+        cellRows = cellRows.slice(1);
+        for (let row of cellRows) {
+            let anchor = row[0].children[0] as HTMLAnchorElement;
+            if (anchor.tagName === "P") {
+                anchor = anchor.children[0] as HTMLAnchorElement;
+            }
+            if (anchor.tagName !== "A") {
+                throw new Error(`Expected anchored reference but found ${anchor.tagName}`);
+            }
+
+            yield { textContent: row[0].textContent.trim(), linkName: anchor.href.slice(mshelppath.length) };
+        }
+    }
 
     function getFirstParagraphText(element: Element, beforeElement?: string) {
         let nextElement = element;
