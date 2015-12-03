@@ -256,6 +256,9 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
                 result += write(indentRepeat + 1, iteration[itemName], itemName);
             }
             result += `${initialIndent}}\r\n`;
+            if (iteration.__description) {
+                result = `${initialIndent}/** ${iteration.__description} */\r\n${result}`;
+            }
             return result;
         }
         else if (iteration.__type === "enumeration") {
@@ -271,6 +274,9 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
                 result += `${nextLevelIndent}${itemName},\r\n`;
             }
             result += `${initialIndent}}\r\n`;
+            if (iteration.__description) {
+                result = `${initialIndent}/** ${iteration.__description} */\r\n${result}`;
+            }
             return result;
         }
         else if (iteration.__type === "class") {
@@ -282,6 +288,9 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
                 result += writeLineBrokenProperty(indentRepeat + 1, member);
             }
             result += `${initialIndent}}\r\n`;
+            if (iteration.__description) {
+                result = `${initialIndent}/** ${iteration.__description} */\r\n${result}`;
+            }
             return result;
         }
     }
