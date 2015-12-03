@@ -32,7 +32,7 @@ interface ExtendedFunctionSignature extends FunctionSignature {
 
 interface FunctionDescription extends TypeDescription { __type: "function"; __signatures: ExtendedFunctionSignature[]; }
 interface EventDescription extends TypeDescription { __type: "event"; __delegate: string; }
-interface NamespaceDescription extends TypeDescription { __type: "namespace"; __interfaces: InterfaceLiteralTypeNotation[] }
+interface InterfaceLiteralDescription extends TypeDescription { __type: "interfaceliteral"; __members: DescribedKeyTypePair[]; }
 
 async function main() {
     let args = parseArgs();
@@ -81,7 +81,7 @@ function map(parentIteration: TypeDescription, docs: any) {
     for referenced typename: if map.has(typeName) then namespace[typeName] = interfaceLiteralDescription;
     */
 
-    let interfaceParentNamespaceMap = new Map<string, NamespaceDescription>();
+    let interfaceParentNamespaceMap = new Map<string, TypeDescription>();
     let typeReferenceSet = new Set<string>();
     mapItem(parentIteration);
 
@@ -157,9 +157,8 @@ function map(parentIteration: TypeDescription, docs: any) {
                         }
                         else if (doc.type === "namespace") {
                             item.__type = doc.type;
-                            (item as NamespaceDescription).__interfaces = [];
                             for (let structure of (doc as NamespaceDocumentNotation).members.structures) {
-                                interfaceParentNamespaceMap.set(structure, item as NamespaceDescription);
+                                interfaceParentNamespaceMap.set(structure, item);
                             }
                         }
                     }
@@ -188,11 +187,17 @@ function map(parentIteration: TypeDescription, docs: any) {
             continue;
         }
         if (doc.type === "structure") {
-            parentNamespace.__interfaces.push({
-                description: doc.description,
-                type: "interfaceliteral",
-                members: (doc as StructureTypeNotation).members
-            })
+            let split = typeReference.split('.');
+            let shortName = split[split.length - 1];
+            if (!shortName) {
+                throw new Error(`Unexpected structure name: ${typeReference}`);
+            }
+            parentNamespace[shortName] = {
+                __fullname: typeReference,
+                __description: doc.description,
+                __type: "interfaceliteral",
+                __members: (doc as StructureTypeNotation).members
+            } as InterfaceLiteralDescription;
         }
     }
 
@@ -270,6 +275,14 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
         }
         else if (iteration.__type === "class") {
             return `${writeClass(indentRepeat, iteration as ClassDescription, iterationName)}\r\n`;
+        }
+        else if (iteration.__type === "interfaceliteral") {
+            let result = `${initialIndent}interface ${iterationName} {\r\n`;
+            for (let member of (iteration as InterfaceLiteralDescription).__members) {
+                result += writeLineBrokenProperty(indentRepeat + 1, member);
+            }
+            result += `${initialIndent}}\r\n`;
+            return result;
         }
     }
 
@@ -403,9 +416,9 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
     }
     function writeLineBrokenProperty(indentRepeat: number, property: DescribedKeyTypePair) {
         let indent = repeatIndent(indentBase, indentRepeat);
-        let result = indent + `${property.key}: ${normalizeTypeName(property.type)};`;
+        let result = `${indent}${property.key}: ${normalizeTypeName(property.type)};\r\n`;
         if (property.description) {
-            result += `${indent}/** ${property.description} */\r\n${result}`;
+            result = `${indent}/** ${property.description} */\r\n${result}`;
         }
         return result;
     }
@@ -446,6 +459,9 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
 
         if (arrayIndication) {
             typeName += '[]';
+        }
+        if (typeName.includes(".I2C")) {
+            typeName = typeName.replace(/\.I2C/g, ".I2c");
         }
 
         return typeName;

@@ -449,7 +449,7 @@ async function parseAsMap() {
                 for (let row of rows) {
                     let memberName = parseMemberName(row.children[0] as HTMLTableColElement);
                     let memberType = exportJavaScriptTypeNotation(parseTypeNotationElement((row.children[1] as HTMLTableColElement).children[0] as HTMLParagraphElement, true));
-                    let memberDescription = row.children[2].textContent.trim();
+                    let memberDescription = getFirstParagraphText(row.children[2].firstElementChild);
                     notation.members.push({
                         description: memberDescription,
                         key: memberName[1],
