@@ -365,31 +365,26 @@ async function parseAsMap() {
             else if (title.endsWith(" event")) {
                 // Example URL: https://msdn.microsoft.com/en-us/library/windows/apps/windows.media.capture.core.variablephotosequencecapture.photocaptured.aspx
 
-                let codeSnippetText = extractSyntaxCodeSnippets(mainSection).get("JavaScript")
-                if (codeSnippetText == null) {
-                    throw new Error("No JS code snippet");
-                }
+                let result = dombox.packByHeader(mainSection);
+
+                let codeSnippetText = result.children.filter((element) => element.tagName === "CODESNIPPET" && element.getAttribute("language") === "JavaScript")[0].textContent;
 
                 let eventListener = codeSnippetText.match(eventListenerRegex);
                 let onevent = codeSnippetText.match(oneventRegex);
-
-                let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Event information"))[0];
-                let table = before.nextElementSibling as HTMLTableElement;
+                
+                let table = result.subheaders["Event information"].children[0] as HTMLTableElement;
                 let rows = Array.from(table.rows) as HTMLTableRowElement[];
                 if (rows.length > 1) {
-                    debugger;
                     throw new Error("Unexpected multiple table rows");
                 }
-                let header = rows[0].children[0];
                 let typeNotationElement = rows[0].children[1];
                 let delegate = exportJavaScriptTypeNotation(parseTypeNotationElement(typeNotationElement as HTMLTableColElement, true))
                 if (!delegate) {
                     // JS compatibility is already checked above
-                    throw new Error("Expected JS type but not found");
+                    throw new Error("Expected a JavaScript-compatible type but not found");
                 }
 
                 if (!eventListener || !onevent) {
-                    debugger;
                     throw new Error("Expected both event listener/onevent syntax but not found");
                 }
                 referenceMap.set(addOnPrefixOnHelpId(helpId), {
@@ -498,25 +493,6 @@ async function parseAsMap() {
             }
             nextElement = nextElement.nextElementSibling;
         }
-    }
-    function extractSyntaxCodeSnippets(mainSection: HTMLDivElement) {
-        let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Syntax"))[0];
-        let snippetMap = new Map<string, string>();
-        if (!before) {
-            return snippetMap;
-        }
-
-        let codesnippetElement = before.nextElementSibling;
-        while (codesnippetElement && codesnippetElement.tagName === "CODESNIPPET") {
-            let language = codesnippetElement.getAttribute("language")
-            if (!language) {
-                throw new Error("CODESNIPPET element does not have 'language' attribute");
-            }
-            snippetMap.set(language, codesnippetElement.textContent);
-
-            codesnippetElement = codesnippetElement.nextElementSibling;
-        }
-        return snippetMap;
     }
     function addOnPrefixOnHelpId(helpId: string) {
         let lastDotIndex = helpId.lastIndexOf(".");
