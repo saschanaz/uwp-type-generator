@@ -314,41 +314,35 @@ async function parseAsMap() {
                     description
                 } as FunctionSignature;
 
-                let codeSnippetText = extractSyntaxCodeSnippets(mainSection).get("JavaScript")
-                if (codeSnippetText == null) {
-                    throw new Error("No JS code snippet");
-                }
-                signature.codeSnippet = codeSnippetText;
+                let result = dombox.packByHeader(mainSection);
+                signature.codeSnippet = result.children.filter((element) => element.tagName === "CODESNIPPET" && element.getAttribute("language") === "JavaScript")[0].textContent;
 
                 let parentheses = parenthesisRegex.exec(helpId);
                 if (parentheses) {
                     helpId = helpId.slice(0, parentheses.index);
                 } // may exist when with params, may not when without
-
-                let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Parameters"))[0];
-                let parameterListElement = before.nextElementSibling as HTMLDListElement;
+                
+                let parameterListElement = result.subheaders["Parameters"].children[0] as HTMLDListElement;
                 signature.parameters = parseParameterList(parameterListElement);
                 if (!signature.parameters) {
-                    // JS incompatible
-                    continue;
+                    throw new Error("Expected a non-empty parameter list but not found");
                 }
 
-                before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Return value"))[0];
-                if (before) {
-                    let typeNotationElement = before.nextElementSibling as HTMLParagraphElement;
-                    let typeDescriptionElement = typeNotationElement.nextElementSibling;
+                let returnValueHeader = result.subheaders["Return value"];
+                if (returnValueHeader) {
+                    let typeNotationElement = returnValueHeader.children[0] as HTMLParagraphElement;
+                    let typeDescriptionElement = returnValueHeader.children[1];
 
                     let type: string
                     if (typeNotationElement.children.length > 0) {
                         type = exportJavaScriptTypeNotation(parseTypeNotationElement(typeNotationElement));
                         if (!type) {
-                            // JS incompatible
-                            continue;
+                            throw new Error("Expected a JavaScript-compatible type but not found");
                         }
                     }
                     else {
                         // Some document has "Return value" header but does not have type notation
-                        // https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.calls.phonecallhistorystore.getentryasync.aspx?cs-save-lang=1&cs-lang=javascript#code-snippet-1
+                        // https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.calls.phonecallhistorystore.getentryasync.aspx
                         type = "unknown";
                     }
 
@@ -366,7 +360,7 @@ async function parseAsMap() {
                 notation.signatures.push(signature);
 
                 referenceMap.set(helpId, notation);
-                // Proposal: insert FunctionTypeNotation, and later check same key exists and append more signatures
+                // insert FunctionTypeNotation, and later check same key exists and append more signatures
             }
             else if (title.endsWith(" event")) {
                 // Example URL: https://msdn.microsoft.com/en-us/library/windows/apps/windows.media.capture.core.variablephotosequencecapture.photocaptured.aspx
