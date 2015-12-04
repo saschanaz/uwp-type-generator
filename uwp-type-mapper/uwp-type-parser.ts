@@ -492,10 +492,15 @@ async function parseAsMap() {
     }
 
     function getFirstParagraphText(element: Element, beforeElement?: string) {
+        // ignore '[text]' formed paragraphs
+        // https://msdn.microsoft.com/en-us/library/windows/apps/windows.ui.input.inking.inkmanager.aspx
         let nextElement = element;
         while (nextElement && nextElement.tagName !== beforeElement) {
             if (nextElement.tagName === "P") {
-                return inline(nextElement.textContent.trim());
+                let text = nextElement.textContent.trim();
+                if (!text.startsWith('[') || !text.endsWith(']')) {
+                    return inline(nextElement.textContent.trim());
+                }
             }
             nextElement = nextElement.nextElementSibling;
         }

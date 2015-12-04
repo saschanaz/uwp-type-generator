@@ -351,9 +351,6 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
         if (constructor.__extends && constructor.__extends !== "Object") {
             result += ` extends ${constructor.__extends}`
         }
-        if (constructor.__eventTarget) {
-            result += " implements ImmutableEventTarget"; // Only have add/removeEventListener without dispatchEvent
-        }
         result += ' {\r\n';
 
         for (let itemName in constructor) {
@@ -537,7 +534,6 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
         let outParameters: DescribedKeyTypePair[] = [];
         let codeSnippetArgs = extractCallArguments(signature.codeSnippet, name);
         
-        // TODO: use args
         for (let i = 0; i < signature.parameters.length; i++) {
             let parameter = signature.parameters[i];
             let arg = codeSnippetArgs[i];
@@ -576,7 +572,7 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
         else {
             if (signature.return) {
                 outParameters.push({
-                    description: signature.description,
+                    description: (signature.return as TypeNotation).description,
                     key: "returnValue",
                     type: (signature.return as TypeNotation).type
                 });
