@@ -29,6 +29,10 @@ interface InterfaceLiteralTypeNotation {
 interface ExtendedFunctionSignature extends FunctionSignature {
     return: "instance" | TypeNotation | InterfaceLiteralTypeNotation;
 }
+interface ExtendedClassDescription extends ClassDescription {
+    __eventTarget?: boolean;
+    __constructor: FunctionDescription;
+}
 
 interface FunctionDescription extends TypeDescription { __type: "function"; __signatures: ExtendedFunctionSignature[]; }
 interface EventDescription extends TypeDescription { __type: "event"; __delegate: string; }
@@ -171,10 +175,21 @@ function map(parentIteration: TypeDescription, docs: any) {
                 else if (item.__type === "class") {
                     mapItem(item);
 
-                    if (hasEventCallback((item as ClassDescription).prototype)) {
-                        (item as ClassDescription).__eventTarget = true;
-                        delete (item as ClassDescription).prototype["addEventListener"];
-                        delete (item as ClassDescription).prototype["removeEventListener"];
+                    let ctorFullName = `${fullName}.constructor`;
+                    let ctorDoc = docs[ctorFullName] as FunctionTypeNotation;
+                    if (ctorDoc) {
+                        item["__constructor"] = {
+                            __fullname: ctorFullName,
+                            __description: ctorDoc.description,
+                            __type: "function",
+                            __signatures: rememberReferencedTypes(ctorDoc.signatures)
+                        } as FunctionDescription;
+                    }
+
+                    if (hasEventCallback((item as ExtendedClassDescription).prototype)) {
+                        (item as ExtendedClassDescription).__eventTarget = true;
+                        delete (item as ExtendedClassDescription).prototype["addEventListener"];
+                        delete (item as ExtendedClassDescription).prototype["removeEventListener"];
                     }
                 }
             }
@@ -297,7 +312,7 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
             return result;
         }
         else if (iteration.__type === "class") {
-            return `${writeClass(indentRepeat, iteration as ClassDescription, iterationName)}\r\n`;
+            return `${writeClass(indentRepeat, iteration as ExtendedClassDescription, iterationName)}\r\n`;
         }
         else if (iteration.__type === "interfaceliteral") {
             let result = `${initialIndent}interface ${iterationName} {\r\n`;
@@ -324,14 +339,14 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
     }
 
 
-    function writeClass(indentRepeat: number, constructor: ClassDescription, className: string) {
+    function writeClass(indentRepeat: number, constructor: ExtendedClassDescription, className: string) {
         let initialIndent = repeatIndent(indentBase, indentRepeat);
         let nextLevelIndent = initialIndent + indentBase;
         let result = "";
         if (constructor.__description) {
-            result += initialIndent + `/** ${constructor.__description} */\r\n`;
+            result += `${initialIndent}/** ${constructor.__description} */\r\n`;
         }
-        result += initialIndent + `class ${className}`;
+        result += `${initialIndent}class ${className}`;
 
         if (constructor.__extends && constructor.__extends !== "Object") {
             result += ` extends ${constructor.__extends}`
@@ -347,6 +362,16 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
             }
             result += writeClassMemberLines(indentRepeat + 1, constructor[itemName] as TypeNameOrDescription, itemName, true);
         }
+
+        if (constructor.__constructor) {
+            let ctor = constructor.__constructor;
+            for (let signature of (ctor as FunctionDescription).__signatures) {
+                // TODO: description for parameters
+                result += `${nextLevelIndent}/** ${signature.description} */\r\n`;
+                result += `${nextLevelIndent}constructor(${writeParameters(signature)});\r\n`;
+            }
+        }
+
         let prototype = constructor.prototype;
         for (let itemName in prototype) {
             if ((itemName as string).startsWith("__")) {
