@@ -89,6 +89,7 @@ function map(parentIteration: TypeDescription, docs: any) {
 
     let nonValueTypeParentNamespaceMap = new Map<string, TypeDescription>();
     let typeReferenceSet = new Set<string>();
+    typeReferenceSet.add("Windows.Foundation.EventHandler"); // documents reference this incorrectly
     mapItem(parentIteration);
 
     function mapItem(iteration: TypeDescription) {
@@ -387,8 +388,8 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
         }
 
         if (constructor.__eventTarget) {
-            result += `${nextLevelIndent}addEventListener(type: string, listener: EventListenerOrEventListenerObject): void;\r\n`;
-            result += `${nextLevelIndent}removeEventListener(type: string, listener: EventListenerOrEventListenerObject): void;\r\n`;
+            result += `${nextLevelIndent}addEventListener(type: string, listener: Windows.Foundation.EventHandler<any>): void;\r\n`;
+            result += `${nextLevelIndent}removeEventListener(type: string, listener: Windows.Foundation.EventHandler<any>): void;\r\n`;
         }
 
         result += initialIndent + '}';
@@ -426,10 +427,10 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
                 return result;
             }
             else if (member.__type === "event") {
-                let delegate = (member as EventDescription).__delegate;
-                let result = `${indent}${memberName}: ${delegate};\r\n`;
-                result += `${indent}addEventListener(type: "${memberName.slice(2)}", listener: ${delegate}): void;\r\n`;
-                result += `${indent}removeEventListener(type: "${memberName.slice(2)}", listener: ${delegate}): void;\r\n`;
+                let delegate = normalizeTypeName((member as EventDescription).__delegate);
+                let result = `${indent}${prefix}${memberName}: ${delegate};\r\n`;
+                result += `${indent}${prefix}addEventListener(type: "${memberName.slice(2)}", listener: ${delegate}): void;\r\n`;
+                result += `${indent}${prefix}removeEventListener(type: "${memberName.slice(2)}", listener: ${delegate}): void;\r\n`;
                 if (member.__description) {
                     result = `${indent}/** ${member.__description} */\r\n${result}`;
                 }
@@ -516,6 +517,9 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
         }
         else if (typeName === "System.String") {
             typeName = "string";
+        }
+        else if (typeName === "EventHandler") {
+            typeName = "Windows.Foundation.EventHandler<any>";
         }
 
         if (arrayIndication) {
