@@ -106,7 +106,7 @@ async function parseAsMap() {
             let categoryJs = Array.from(doc.head.querySelectorAll("meta[name=Microsoft\\.Help\\.Category]")).filter((meta: HTMLMetaElement) => meta.content === "DevLang:javascript")[0];
             let startIndex = helpId.indexOf(":windows");
             if (startIndex !== -1) {
-                helpId = helpId.slice(startIndex + 1);
+                helpId = removeTick(helpId.slice(startIndex + 1));
             }
             else {
                 skippedById.push(doc.title);
@@ -487,7 +487,7 @@ async function parseAsMap() {
                 throw new Error(`Expected anchored reference but found ${anchor.tagName}`);
             }
 
-            yield { textContent: row[0].textContent.trim(), linkName: anchor.href.slice(mshelppath.length) };
+            yield { textContent: row[0].textContent.trim(), linkName: removeTick(decodeURI(anchor.href.slice(mshelppath.length))) };
         }
     }
 
@@ -732,6 +732,13 @@ async function parseAsMap() {
 
     function inline(text: string) {
         return text.trim().replace(whitespaceRepeatRegex, " ");
+    }
+    function removeTick(typeName: string) {
+        let backtickIndex = typeName.indexOf("`");
+        if (backtickIndex !== -1) {
+            typeName = typeName.slice(0, backtickIndex);
+        }
+        return typeName;
     }
 }
 

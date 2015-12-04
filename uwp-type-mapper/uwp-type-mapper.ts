@@ -510,6 +510,7 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
             typeName = "string";
         }
         else {
+            // TODO: move this to parser
             let backtickIndex = typeName.indexOf("`");
             if (backtickIndex !== -1) {
                 typeName = typeName.slice(0, backtickIndex);
