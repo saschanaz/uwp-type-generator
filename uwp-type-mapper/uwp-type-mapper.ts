@@ -338,11 +338,11 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
             let signature = (iteration as DelegateDescription).__signature;
             // description for parameters
             let result = `${initialIndent}/** ${iteration.__description} */\r\n`;
-            result += `${initialIndent}type ${iterationName} = `
+            result += `${initialIndent}type ${iterationName}`
             if (signature.typeParameters) {
                 result += `<${signature.typeParameters.join(', ')}>`
             }
-            result += `(${writeParameters(signature)}) => void;\r\n`;
+            result += ` = (${writeParameters(signature)}) => void;\r\n`;
             return result;
         }
     }
