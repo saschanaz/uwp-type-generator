@@ -85,6 +85,7 @@ function map(parentIteration: TypeDescription, docs: any) {
 
     for referenced typename: if map.has(typeName) then namespace[typeName] = interfaceLiteralDescription;
     */
+    let genericsRegex = /<(.+)>$/;
 
     let nonValueTypeParentNamespaceMap = new Map<string, TypeDescription>();
     let typeReferenceSet = new Set<string>();
@@ -117,13 +118,12 @@ function map(parentIteration: TypeDescription, docs: any) {
                     case "function":
                         /*
                         TODO: interfaces from parser and iterator are too different, should be integrated
-                        TypeDescription does not have members for function signatures
                         */
                         iteration[itemName] = {
                             __fullname: fullName,
                             __type: "function",
                             __description: doc.description,
-                            __signatures: rememberReferencedTypes((doc as FunctionTypeNotation).signatures)
+                            __signatures: rememberReferenceInSignatures((doc as FunctionTypeNotation).signatures)
                         } as FunctionDescription;
                         break;
                     case "event":
@@ -131,6 +131,7 @@ function map(parentIteration: TypeDescription, docs: any) {
                         TODO: methods and onevents must be distingushable (by __type?)
                         Do FunctionDescription have to allow "function"|"?" <- What name? callback?
                          */
+                        typeReferenceSet.add(removeGenericsSyntax((doc as EventTypeNotation).delegate));
                         iteration[itemName] = {
                             __fullname: fullName,
                             __type: "event",
@@ -182,7 +183,7 @@ function map(parentIteration: TypeDescription, docs: any) {
                             __fullname: ctorFullName,
                             __description: ctorDoc.description,
                             __type: "function",
-                            __signatures: rememberReferencedTypes(ctorDoc.signatures)
+                            __signatures: rememberReferenceInSignatures(ctorDoc.signatures)
                         } as FunctionDescription;
                     }
 
@@ -246,16 +247,24 @@ function map(parentIteration: TypeDescription, docs: any) {
         return false;
     }
 
-    function rememberReferencedTypes(signatures: FunctionSignature[]) {
+    function rememberReferenceInSignatures(signatures: FunctionSignature[]) {
         for (let signature of signatures) {
             for (let parameter of signature.parameters) {
-                typeReferenceSet.add(parameter.type);
+                typeReferenceSet.add(removeGenericsSyntax(parameter.type));
             }
             if (signature.return && typeof signature.return !== "string") {
-                typeReferenceSet.add((signature.return as TypeNotation).type);
+                typeReferenceSet.add(removeGenericsSyntax((signature.return as TypeNotation).type));
             }
         }
         return signatures;
+    }
+
+    function removeGenericsSyntax(text: string) {
+        let genericsMatch = text.match(genericsRegex);
+        if (genericsMatch) {
+            text = text.slice(0, genericsMatch.index);
+        }
+        return text;
     }
 }
 

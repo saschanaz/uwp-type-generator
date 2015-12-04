@@ -11,7 +11,7 @@
     <TypeScriptModuleKind>CommonJS</TypeScriptModuleKind>
     <TypeScriptJSXEmit>None</TypeScriptJSXEmit>
     <TypeScriptCompileOnSaveEnabled>True</TypeScriptCompileOnSaveEnabled>
-    <ScriptArguments>-i built/iteration.json -o built/winrt-uwp.d.ts -mapout built/iteration.mapped.json --force-reparse</ScriptArguments>
+    <ScriptArguments>-i built/iteration.json -o built/winrt-uwp.d.ts -mapout built/iteration.mapped.json</ScriptArguments>
   </PropertyGroup>
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>

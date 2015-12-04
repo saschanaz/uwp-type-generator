@@ -87,7 +87,7 @@ async function parseAsMap() {
     let whitespaceRepeatRegex = /\s{1,}/g;
     let eventListenerRegex = /\w+\.addEventListener\(\"(\w+)\"\, \w+\)/;
     let oneventRegex = /\w+\.on(\w+) =/;
-    let genericsRegex = /<([^>]+)>$/;
+    let genericsRegex = /<(.+)>$/;
     let files = await findAllHTMLFilePaths(referencepath);
     let skippedById: string[] = [];
 
@@ -315,7 +315,8 @@ async function parseAsMap() {
                 } as FunctionSignature;
 
                 let result = dombox.packByHeader(mainSection);
-                signature.codeSnippet = result.children.filter((element) => element.tagName === "CODESNIPPET" && element.getAttribute("language") === "JavaScript")[0].textContent;
+                let syntaxHeader = result.subheaders["Syntax"];
+                signature.codeSnippet = syntaxHeader.children.filter((element) => element.tagName === "CODESNIPPET" && element.getAttribute("language") === "JavaScript")[0].textContent;
 
                 let parentheses = parenthesisRegex.exec(helpId);
                 if (parentheses) {
@@ -330,26 +331,30 @@ async function parseAsMap() {
 
                 let returnValueHeader = result.subheaders["Return value"];
                 if (returnValueHeader) {
-                    let typeNotationElement = returnValueHeader.children[0] as HTMLParagraphElement;
-                    let typeDescriptionElement = returnValueHeader.children[1];
+                    if (returnValueHeader.children.length > 0) {
+                        let typeNotationElement = returnValueHeader.children[0] as HTMLParagraphElement;
+                        let typeDescriptionElement = returnValueHeader.children[1];
 
-                    let type: string
-                    if (typeNotationElement.children.length > 0) {
-                        type = exportJavaScriptTypeNotation(parseTypeNotationElement(typeNotationElement));
+                        let type = exportJavaScriptTypeNotation(parseTypeNotationElement(typeNotationElement));
                         if (!type) {
                             throw new Error("Expected a JavaScript-compatible type but not found");
                         }
+
+                        signature.return = {
+                            description: inline(typeDescriptionElement.textContent),
+                            type
+                        } as TypeNotation;
                     }
                     else {
                         // Some document has "Return value" header but does not have type notation
                         // https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.calls.phonecallhistorystore.getentryasync.aspx
-                        type = "unknown";
+
+                        signature.return = {
+                            description: "",
+                            type: "unknown"
+                        } as TypeNotation;
                     }
 
-                    signature.return = {
-                        description: inline(typeDescriptionElement.textContent),
-                        type
-                    } as TypeNotation;
                 }
 
                 let notation = referenceMap.get(helpId) as FunctionTypeNotation || {
@@ -367,7 +372,8 @@ async function parseAsMap() {
 
                 let result = dombox.packByHeader(mainSection);
 
-                let codeSnippetText = result.children.filter((element) => element.tagName === "CODESNIPPET" && element.getAttribute("language") === "JavaScript")[0].textContent;
+                let syntaxHeader = result.subheaders["Syntax"];
+                let codeSnippetText = syntaxHeader.children.filter((element) => element.tagName === "CODESNIPPET" && element.getAttribute("language") === "JavaScript")[0].textContent;
 
                 let eventListener = codeSnippetText.match(eventListenerRegex);
                 let onevent = codeSnippetText.match(oneventRegex);
@@ -609,7 +615,12 @@ async function parseAsMap() {
             trimmedTextContent = node.textContent.trim();
             if (isElement(node)) {
                 if (isAnchorElement(node)) {
-                    proposedTypeName = decodeURI(node.href.slice(mshelppath.length));
+                    proposedTypeName = removeTick(decodeURI(node.href.slice(mshelppath.length)));
+
+                    let genericsMatch = node.textContent.trim().match(genericsRegex);
+                    if (genericsMatch) {
+                        proposedTypeName += genericsMatch[0];
+                    }
                 }
                 else if (node.tagName === "STRONG" || node.tagName === "SPAN") {
                     proposedTypeName = trimmedTextContent
