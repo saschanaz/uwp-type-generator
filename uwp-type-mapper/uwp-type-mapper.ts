@@ -427,10 +427,9 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
             }
             else if (member.__type === "event") {
                 let delegate = (member as EventDescription).__delegate;
-                let callbackString = `(ev: ${normalizeTypeName(delegate)}) => any`;
-                let result = `${indent}${memberName}: ${callbackString};\r\n`;
-                result += `${indent}addEventListener(type: "${memberName.slice(2)}", listener: ${callbackString}): void;\r\n`;
-                result += `${indent}removeEventListener(type: "${memberName.slice(2)}", listener: ${callbackString}): void;\r\n`;
+                let result = `${indent}${memberName}: ${delegate};\r\n`;
+                result += `${indent}addEventListener(type: "${memberName.slice(2)}", listener: ${delegate}): void;\r\n`;
+                result += `${indent}removeEventListener(type: "${memberName.slice(2)}", listener: ${delegate}): void;\r\n`;
                 if (member.__description) {
                     result = `${indent}/** ${member.__description} */\r\n${result}`;
                 }
@@ -517,13 +516,6 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
         }
         else if (typeName === "System.String") {
             typeName = "string";
-        }
-        else {
-            // TODO: move this to parser
-            let backtickIndex = typeName.indexOf("`");
-            if (backtickIndex !== -1) {
-                typeName = typeName.slice(0, backtickIndex);
-            }
         }
 
         if (arrayIndication) {
