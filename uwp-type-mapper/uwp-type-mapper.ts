@@ -32,6 +32,7 @@ interface ExtendedFunctionSignature extends FunctionSignature {
 
 interface FunctionDescription extends TypeDescription { __type: "function"; __signatures: ExtendedFunctionSignature[]; }
 interface EventDescription extends TypeDescription { __type: "event"; __delegate: string; }
+interface DelegateDescription extends TypeDescription { __type: "delegate"; __signature: FunctionSignature; }
 interface InterfaceLiteralDescription extends TypeDescription { __type: "interfaceliteral"; __members: DescribedKeyTypePair[]; }
 
 async function main() {
@@ -81,7 +82,7 @@ function map(parentIteration: TypeDescription, docs: any) {
     for referenced typename: if map.has(typeName) then namespace[typeName] = interfaceLiteralDescription;
     */
 
-    let interfaceParentNamespaceMap = new Map<string, TypeDescription>();
+    let nonValueTypeParentNamespaceMap = new Map<string, TypeDescription>();
     let typeReferenceSet = new Set<string>();
     mapItem(parentIteration);
 
@@ -158,7 +159,10 @@ function map(parentIteration: TypeDescription, docs: any) {
                         else if (doc.type === "namespace") {
                             item.__type = doc.type;
                             for (let structure of (doc as NamespaceDocumentNotation).members.structures) {
-                                interfaceParentNamespaceMap.set(structure, item);
+                                nonValueTypeParentNamespaceMap.set(structure, item);
+                            }
+                            for (let delegate of (doc as NamespaceDocumentNotation).members.delegates) {
+                                nonValueTypeParentNamespaceMap.set(delegate, item);
                             }
                         }
                     }
@@ -182,7 +186,7 @@ function map(parentIteration: TypeDescription, docs: any) {
         if (!doc) {
             continue;
         }
-        let parentNamespace = interfaceParentNamespaceMap.get(typeReference);
+        let parentNamespace = nonValueTypeParentNamespaceMap.get(typeReference);
         if (!parentNamespace) {
             continue;
         }
@@ -198,6 +202,19 @@ function map(parentIteration: TypeDescription, docs: any) {
                 __type: "interfaceliteral",
                 __members: (doc as StructureTypeNotation).members
             } as InterfaceLiteralDescription;
+        }
+        else if (doc.type === "delegate") {
+            let split = typeReference.split('.');
+            let shortName = split[split.length - 1];
+            if (!shortName) {
+                throw new Error(`Unexpected structure name: ${typeReference}`);
+            }
+            parentNamespace[shortName] = {
+                __fullname: typeReference,
+                __description: doc.description,
+                __type: "delegate",
+                __signature: (doc as DelegateTypeNotation).signature
+            } as DelegateDescription;
         }
     }
 
@@ -291,6 +308,17 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
             if (iteration.__description) {
                 result = `${initialIndent}/** ${iteration.__description} */\r\n${result}`;
             }
+            return result;
+        }
+        else if (iteration.__type === "delegate") {
+            let signature = (iteration as DelegateDescription).__signature;
+            // description for parameters
+            let result = `${initialIndent}/** ${iteration.__description} */\r\n`;
+            result += `${initialIndent}type ${iterationName} = `
+            if (signature.typeParameters) {
+                result += `<${signature.typeParameters.join(', ')}>`
+            }
+            result += `(${writeParameters(signature)}) => void;\r\n`;
             return result;
         }
     }
