@@ -175,6 +175,9 @@ function map(parentIteration: TypeDescription, docs: any) {
                     mapItem(item);
                 }
                 else if (item.__type === "class") {
+                    if (doc && doc.type === "attribute") {
+                        item.__type = doc.type;
+                    }
                     mapItem(item);
 
                     let ctorFullName = `${fullName}.constructor`;
@@ -324,6 +327,9 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
         else if (iteration.__type === "class") {
             return `${writeClass(indentRepeat, iteration as ExtendedClassDescription, iterationName)}\r\n`;
         }
+        else if (iteration.__type === "attribute") {
+            return `${writeClass(indentRepeat, iteration as ExtendedClassDescription, iterationName, true)}\r\n`;
+        }
         else if (iteration.__type === "interfaceliteral") {
             let result = `${initialIndent}interface ${iterationName} {\r\n`;
             for (let member of (iteration as InterfaceLiteralDescription).__members) {
@@ -349,14 +355,15 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
     }
 
 
-    function writeClass(indentRepeat: number, constructor: ExtendedClassDescription, className: string) {
+    function writeClass(indentRepeat: number, constructor: ExtendedClassDescription, className: string, unconstructable?: boolean) {
         let initialIndent = repeatIndent(indentBase, indentRepeat);
         let nextLevelIndent = initialIndent + indentBase;
+        let classPrefix = unconstructable ? "abstract " : "";
         let result = "";
         if (constructor.__description) {
             result += `${initialIndent}/** ${constructor.__description} */\r\n`;
         }
-        result += `${initialIndent}class ${className}`;
+        result += `${initialIndent}${classPrefix}class ${className}`;
 
         if (constructor.__extends && constructor.__extends !== "Object") {
             result += ` extends ${constructor.__extends}`
@@ -370,7 +377,7 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
             result += writeClassMemberLines(indentRepeat + 1, constructor[itemName] as TypeNameOrDescription, itemName, true);
         }
 
-        if (constructor.__constructor) {
+        if (constructor.__constructor && !unconstructable) {
             let ctor = constructor.__constructor;
             for (let signature of (ctor as FunctionDescription).__signatures) {
                 // TODO: description for parameters

@@ -122,13 +122,19 @@ async function parseAsMap() {
             let description = getFirstParagraphText(mainSection.firstElementChild, "H2");
             let title = doc.body.querySelector("div.title").textContent.trim();
 
-            if (title.endsWith(" class") || title.endsWith(" attribute")) {
+            if (title.endsWith(" class")) {
                 // https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.background.smartcardtrigger.aspx
 
                 referenceMap.set(helpId, {
                     description,
                     type: "class"
                 } as TypeNotation);
+            }
+            else if (title.endsWith(" attribute")) {
+                referenceMap.set(helpId, {
+                    description,
+                    type: "attribute"
+                } as TypeNotation); 
             }
             else if (title.endsWith(" enumeration")) {
                 // Example URL: https://msdn.microsoft.com/en-us/library/windows/apps/windows.devices.pointofservice.posprintercartridgesensors.aspx
