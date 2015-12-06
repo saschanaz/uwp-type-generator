@@ -51,7 +51,18 @@ async function main() {
     if (!(await fspromise.exists("supplies/prepend.d.ts"))) {
         throw new Error("Expected supplies/prepend.d.ts file but the path is not found");
     }
+    if (!(await fspromise.exists("supplies/typelink.json"))) {
+        throw new Error("Expected supplies/typelink.json file but the path is not found");
+    }
     let prepend = await fspromise.readFile("supplies/prepend.d.ts");
+    let typelink = JSON.parse(await fspromise.readFile("supplies/typelink.json"));
+    {
+        let temp = {} as any;
+        for (let name of Object.getOwnPropertyNames(typelink).sort()) {
+            temp[name] = typelink[name];
+        }
+        await fspromise.writeFile("supplies/typelink.json", JSON.stringify(temp, undefined, 4));
+    }
 
     console.log("Loading documentations...");
     let docs = await loadDocs("--force-reparse" in args)
@@ -68,10 +79,41 @@ async function main() {
     }
 
     console.log("Storing result d.ts file...");
-    await fspromise.writeFile(args["-o"], prepend + "\r\n" + writeAsDTS(iterations, "Windows"));
+    await fspromise.writeFile(args["-o"], prepend + "\r\n" + writeAsDTS(iterations, tryLinkType));
 
     console.log("Finished.");
     process.exit();
+
+    function tryLinkType(typeName: string) {
+        let typeNameRegex = /[\w\.]+/g;
+        let remainingGenericSyntax = /^<(.+)>$/;
+
+        let result = typeName.replace(typeNameRegex, (match) => {
+            if (match.toLowerCase() in docs) {
+                return match;
+            }
+            let linkedType = typelink[match];
+            if (linkedType != null) {
+                return linkedType;
+            }
+            let interfaceMatch = match.match(/\.I([A-Z]\w+)/);
+            if (!interfaceMatch) {
+                return match;
+            }
+            let valueName = match.replace(/\.I([A-Z]\w+)/, ".$1");
+            if (valueName.toLowerCase() in docs) {
+                return valueName;
+            }
+            return match;
+        });
+
+        let remainingGenericMatch = result.match(remainingGenericSyntax);
+        if (remainingGenericMatch) {
+            result = remainingGenericMatch[1];
+        }
+
+        return result;
+    }
 }
 
 function map(parentIteration: TypeDescription, docs: any) {
@@ -272,10 +314,10 @@ function map(parentIteration: TypeDescription, docs: any) {
     }
 }
 
-function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
+function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: string) => string) {
     let stack: TypeDescription[] = [];
     let indentBase = "    ";
-    return "declare " + write(0, baseIteration, baseIterationName);
+    return "declare " + write(0, baseIteration, baseIteration.__fullname);
 
     function write(indentRepeat: number, iteration: TypeNameOrDescription, iterationName: string) {
         let initialIndent = repeatIndent(indentBase, indentRepeat);
@@ -515,19 +557,8 @@ function writeAsDTS(baseIteration: TypeDescription, baseIterationName: string) {
             arrayIndication = true;
             typeName = typeName.slice(9);
         }
-
-        if (typeName === "String" || typeName === "Boolean" || typeName === "Number") {
-            typeName = typeName.toLowerCase();
-        }
-        else if (typeName === "Object") {
-            typeName = "any";
-        }
-        else if (typeName === "System.String") {
-            typeName = "string";
-        }
-        else if (typeName === "EventHandler") {
-            typeName = "Windows.Foundation.EventHandler<any>";
-        }
+        
+        typeName = typeLinker(typeName);
 
         if (arrayIndication) {
             typeName += '[]';

@@ -1,0 +1,19 @@
+{
+    "Boolean": "boolean",
+    "Byte": "number",
+    "Double": "number",
+    "EventHandler": "Windows.Foundation.EventHandler<any>",
+    "Guid": "string",
+    "Int16": "number",
+    "Int32": "number",
+    "Int64": "number",
+    "Number": "number",
+    "Object": "any",
+    "String": "string",
+    "System.String": "string",
+    "UInt32": "number",
+    "UInt64": "number",
+    "Windows.Devices.Bluetooth.RfcommServiceId": "Windows.Devices.Bluetooth.Rfcomm.RfcommServiceId",
+    "Windows.Foundation.IReference": "",
+    "Windows.Storage.Streams.IRandomAccessStreamWithContentType": "Windows.Storage.Streams.RandomAccessStream"
+}
