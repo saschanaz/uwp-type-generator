@@ -109,6 +109,7 @@ async function main() {
 
         let remainingGenericMatch = result.match(remainingGenericSyntax);
         if (remainingGenericMatch) {
+            // e.g. Windows.Foundation.IReference
             result = remainingGenericMatch[1];
         }
 
@@ -183,6 +184,7 @@ function map(parentIteration: TypeDescription, docs: any) {
                         } as EventDescription;
                         break;
                     default: {
+                        typeReferenceSet.add(removeGenericsSyntax(doc.type));
                         iteration[itemName] = {
                             __fullname: fullName,
                             __type: doc.type,
