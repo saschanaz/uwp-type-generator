@@ -89,12 +89,13 @@ async function main() {
         let remainingGenericSyntax = /^<(.+)>$/;
 
         let result = typeName.replace(typeNameRegex, (match) => {
-            if (match.toLowerCase() in docs) {
-                return match;
-            }
             let linkedType = typelink[match];
             if (linkedType != null) {
+                // force linking even if there is a document (for e.g. Windows.Foundation.TimeSpan)
                 return linkedType;
+            }
+            if (match.toLowerCase() in docs) {
+                return match;
             }
             let interfaceMatch = match.match(/\.I([A-Z]\w+)/);
             if (!interfaceMatch) {

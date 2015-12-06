@@ -1,6 +1,7 @@
 {
     "Boolean": "boolean",
     "Byte": "number",
+    "DateTime": "Date",
     "Double": "number",
     "EventHandler": "Windows.Foundation.EventHandler<any>",
     "Guid": "string",
@@ -10,10 +11,14 @@
     "Number": "number",
     "Object": "any",
     "String": "string",
+    "System.Boolean": "boolean",
+    "System.Single": "number",
     "System.String": "string",
     "UInt32": "number",
     "UInt64": "number",
     "Windows.Devices.Bluetooth.RfcommServiceId": "Windows.Devices.Bluetooth.Rfcomm.RfcommServiceId",
+    "Windows.Foundation.DateTime": "Date",
     "Windows.Foundation.IReference": "",
+    "Windows.Foundation.TimeSpan": "number",
     "Windows.Storage.Streams.IRandomAccessStreamWithContentType": "Windows.Storage.Streams.RandomAccessStream"
 }
