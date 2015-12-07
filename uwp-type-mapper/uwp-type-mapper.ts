@@ -393,7 +393,7 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
             return result;
         }
         else if (iteration.__type === "delegate") {
-            let signature = (iteration as DelegateDescription).__signature;
+            let signature = normalizeDelegateSignature((iteration as DelegateDescription)).__signature;
             // description for parameters
             let result = `${initialIndent}/** ${iteration.__description} */\r\n`;
             result += `${initialIndent}type ${iterationName}`
@@ -538,7 +538,7 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
         }
 
         if (typeof signatureReturn === "string") {
-            throw new Error("Unexpected string return type"); // only in class constructor
+            throw new Error("Unexpected string return type"); // only in class constructor ("instance")
         }
         else {
             if (signatureReturn.type === "interfaceliteral") {
@@ -657,6 +657,30 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
         else {
             throw new Error("Cannot find function call inside code snippet");
         }
+    }
+    function normalizeDelegateSignature(delegate: DelegateDescription) {
+        if (!delegate.__fullname.endsWith("EventHandler")) {
+            // Change below is only requried for event handlers
+            return delegate;
+        }
+        let signature = delegate.__signature;
+        if (!signature.parameters.length) {
+            signature.parameters[0] = {
+                key: "ev",
+                type: "WinRTEvent<void>"
+            } as DescribedKeyTypePair;
+        }
+        else {
+            let sender = signature.parameters[0];
+            let eventArg = signature.parameters[1];
+            let prefix = eventArg ? `${eventArg.type} & ` : "";
+            signature.parameters = [];
+            signature.parameters[0] = {
+                key: "ev",
+                type: `${prefix}WinRTEvent<${sender.type}>`
+            } as DescribedKeyTypePair;
+        }
+        return delegate;
     }
 }
 

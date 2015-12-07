@@ -1,7 +1,13 @@
-﻿declare class WinRTError extends Error {
+﻿declare interface WinRTError extends Error {
     description: string;
     number: number;
 }
+declare interface WinRTEvent<TSender> {
+    detail: any[];
+    target: TSender;
+    type: string;
+}
+
 
 declare namespace Windows.Foundation {
     interface IPromise<TResult> {
