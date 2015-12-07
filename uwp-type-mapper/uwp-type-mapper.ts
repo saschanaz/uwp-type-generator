@@ -31,6 +31,7 @@ interface ExtendedFunctionSignature extends FunctionSignature {
 }
 interface ExtendedClassDescription extends ClassDescription {
     __eventTarget?: boolean;
+    __staticEventTarget?: boolean;
     __constructor: FunctionDescription;
 }
 
@@ -241,6 +242,11 @@ function map(parentIteration: TypeDescription, docs: any) {
                         delete (item as ExtendedClassDescription).prototype["addEventListener"];
                         delete (item as ExtendedClassDescription).prototype["removeEventListener"];
                     }
+                    if (hasEventCallback((item as ExtendedClassDescription))) {
+                        (item as ExtendedClassDescription).__staticEventTarget = true;
+                        delete (item as ExtendedClassDescription)["addEventListener"];
+                        delete (item as ExtendedClassDescription)["removeEventListener"];
+                    }
                 }
             }
         }
@@ -403,6 +409,8 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
     function writeClass(indentRepeat: number, constructor: ExtendedClassDescription, className: string, unconstructable?: boolean) {
         let initialIndent = repeatIndent(indentBase, indentRepeat);
         let nextLevelIndent = initialIndent + indentBase;
+        unconstructable = unconstructable || !constructor.__constructor;
+
         let classPrefix = unconstructable ? "abstract " : "";
         let result = "";
         if (constructor.__description) {
@@ -422,7 +430,12 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
             result += writeClassMemberLines(indentRepeat + 1, constructor[itemName] as TypeNameOrDescription, itemName, true);
         }
 
-        if (constructor.__constructor && !unconstructable) {
+        if (constructor.__staticEventTarget) {
+            result += `${nextLevelIndent}static addEventListener(type: string, listener: Windows.Foundation.EventHandler<any>): void;\r\n`;
+            result += `${nextLevelIndent}static removeEventListener(type: string, listener: Windows.Foundation.EventHandler<any>): void;\r\n`;
+        }
+
+        if (!unconstructable) {
             let ctor = constructor.__constructor;
             for (let signature of (ctor as FunctionDescription).__signatures) {
                 // TODO: description for parameters
@@ -510,6 +523,9 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
             let key = parameter.key;
             if (key === "arguments") {
                 key = "args"; // tsc errors if the parameter name is "arguments" even when in ambient condition
+            }
+            else if (key === "function") {
+                key = "func"; // keyword
             }
             parameterArray.push(`${key}: ${normalizeTypeName(parameter.type)}`);
         }
