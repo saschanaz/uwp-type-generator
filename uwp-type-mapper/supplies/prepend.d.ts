@@ -22,6 +22,10 @@ declare namespace Windows.Foundation {
     interface IPromiseWithOperation<TResult, TOperation extends Windows.Foundation.IAsyncAction> extends IPromise<TResult> {
         operation: TOperation;
     }
+    type IPromiseWithIAsyncAction = IPromiseWithOperation<void, IAsyncAction>;
+    type IPromiseWithIAsyncActionWithProgress<TProgress> = IPromiseWithOperation<void, IAsyncActionWithProgress<TProgress>>;
+    type IPromiseWithIAsyncOperation<TResult> = IPromiseWithOperation<TResult, IAsyncOperation<TResult>>;
+    type IPromiseWithIAsyncOperationWithProgress<TResult, TProgress> = IPromiseWithOperation<TResult, IAsyncOperationWithProgress<TResult, TProgress>>;
 
     interface IAsyncAction {
         completed: Windows.Foundation.AsyncActionCompletedHandler;

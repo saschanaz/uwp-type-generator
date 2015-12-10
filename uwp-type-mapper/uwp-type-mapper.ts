@@ -475,7 +475,7 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
         else {
             if (member.__type === "function") {
                 let result = "";
-                for (let signature of (member as FunctionDescription).__signatures) {
+                for (let signature of tryNormalizeAsyncCallReturnType(member as FunctionDescription).__signatures) {
                     signature = normalizeSignature(signature, memberName);
                     // TODO: description for parameters
                     result += `${indent}/** ${signature.description} */\r\n`;
@@ -658,12 +658,12 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
             throw new Error("Cannot find function call inside code snippet");
         }
     }
-    function normalizeDelegateSignature(delegate: DelegateDescription) {
-        if (!delegate.__fullname.endsWith("EventHandler")) {
+    function normalizeDelegateSignature(delegateDesc: DelegateDescription) {
+        if (!delegateDesc.__fullname.endsWith("EventHandler")) {
             // Change below is only requried for event handlers
-            return delegate;
+            return delegateDesc;
         }
-        let signature = delegate.__signature;
+        let signature = delegateDesc.__signature;
         if (!signature.parameters.length) {
             signature.parameters[0] = {
                 key: "ev",
@@ -680,7 +680,27 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
                 type: `${prefix}WinRTEvent<${sender.type}>`
             } as DescribedKeyTypePair;
         }
-        return delegate;
+        return delegateDesc;
+    }
+    function tryNormalizeAsyncCallReturnType(functionDesc: FunctionDescription) {
+        if (!functionDesc.__fullname.endsWith("async")) {
+            // Only for fooAsync-formed methods
+            return functionDesc;
+        }
+        for (let signature of functionDesc.__signatures) {
+            let returnType = signature.return;
+            if (typeof returnType === "string") {
+                throw new Error("Unexpected string return type");
+            }
+            else if (returnType.type.endsWith("Operation")) {
+                returnType.type = `Windows.Foundation.IPromiseWithOperation<${returnType.type}>`;
+            }
+            else if (returnType.type.startsWith("Windows.Foundation.IAsync")) {
+                // alias type IPromiseWithIAsyncOperation<TResult> = IPromiseWithOperation<TResult, IAsyncOperation<TResult>>, etc
+                returnType.type = returnType.type.replace(/^Windows.Foundation.(IAsync\w+)/, "IPromiseWith$1");
+            }
+        }
+        return functionDesc;
     }
 }
 
