@@ -67,6 +67,7 @@ async function main() {
 
     console.log("Loading documentations...");
     let docs = await loadDocs("--force-reparse" in args)
+    let nameMap = createNameResolutionMap(docs);
     console.log("Loading iteration file...");
     let iterations = JSON.parse(await fspromise.readFile(args["-i"]));
 
@@ -90,6 +91,9 @@ async function main() {
         let remainingGenericSyntax = /^<(.+)>$/;
 
         let result = typeName.replace(typeNameRegex, (match) => {
+            if (nameMap.has(match)) {
+                match = nameMap.get(match);
+            }
             let linkedType = typelink[match];
             if (linkedType != null) {
                 // force linking even if there is a document (for e.g. Windows.Foundation.TimeSpan)
@@ -116,6 +120,44 @@ async function main() {
         }
 
         return result;
+    }
+    function createNameResolutionMap(docs: any) {
+        /*
+        automate name resolution instead of enumerating all of them in typelink
+        TODO: docs
+        */
+        let shortNameRegex = /\.(\w+)$/;
+        let map = new Map<string, string>();
+        let duplications = new Set<string>();
+
+        let names = Object.getOwnPropertyNames(docs);
+        for (let name of names) {
+            let match = name.match(shortNameRegex);
+            if (!match) {
+                continue;
+            }
+            let doc = docs[name] as TypeNotation;
+            if (doc.type !== "class" &&
+                doc.type !== "delegate" &&
+                doc.type !== "enumeration" &&
+                doc.type !== "structure") {
+
+                continue;
+            }
+            if (duplications.has(match[1])) {
+                continue;
+            }
+            if (map.has(match[1])) {
+                map.delete(match[1]);
+                duplications.add(match[1]);
+            };
+            map.set(match[1], name);
+        }
+
+        for (let duplication of duplications) {
+            map.set(duplication, "any /* unmapped */");
+        }
+        return map;
     }
 }
 
@@ -697,7 +739,7 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
             }
             else if (returnType.type.startsWith("Windows.Foundation.IAsync")) {
                 // alias type IPromiseWithIAsyncOperation<TResult> = IPromiseWithOperation<TResult, IAsyncOperation<TResult>>, etc
-                returnType.type = returnType.type.replace(/^Windows.Foundation.(IAsync\w+)/, "IPromiseWith$1");
+                returnType.type = returnType.type.replace(/^Windows.Foundation.(IAsync\w+)/, "Windows.Foundation.IPromiseWith$1");
             }
         }
         return functionDesc;
