@@ -2,26 +2,26 @@
 
 import parse from "./uwp-type-parser"
 import {
-TypeNotation,
-FunctionTypeNotation,
-DescribedKeyTypePair,
-FunctionSignature,
-DelegateTypeNotation,
-EventTypeNotation,
-NamespaceDocumentNotation,
-StructureTypeNotation
+    TypeNotation,
+    NamedTypeNotation,
+    FunctionTypeNotation,
+    DescribedKeyTypePair,
+    FunctionSignature,
+    DelegateTypeNotation,
+    EventTypeNotation,
+    NamespaceDocumentNotation,
+    StructureTypeNotation
 } from "./uwp-type-parser";
 import {
-ClassDescription,
-TypeDescription,
-TypeNameOrDescription
+    ClassDescription,
+    TypeDescription,
+    TypeNameOrDescription
 } from "../uwp-type-iterator/iterator";
 import * as fspromise from "./fspromise"
 
 main().catch((err) => console.error(err));
 
-interface InterfaceLiteralTypeNotation {
-    description: string;
+interface InterfaceLiteralTypeNotation extends NamedTypeNotation {
     type: "interfaceliteral"
     members: DescribedKeyTypePair[];
 }
@@ -91,14 +91,16 @@ async function main() {
         let remainingGenericSyntax = /^<(.+)>$/;
 
         let result = typeName.replace(typeNameRegex, (match) => {
-            if (nameMap.has(match)) {
-                match = nameMap.get(match);
+            let lowerCase = match.toLowerCase();
+            if (nameMap.has(lowerCase)) {
+                match = nameMap.get(lowerCase);
             }
             let linkedType = typelink[match];
             if (linkedType != null) {
                 // force linking even if there is a document (for e.g. Windows.Foundation.TimeSpan)
                 return linkedType;
             }
+
             if (match.toLowerCase() in docs) {
                 return match;
             }
@@ -136,7 +138,7 @@ async function main() {
             if (!match) {
                 continue;
             }
-            let doc = docs[name] as TypeNotation;
+            let doc = docs[name] as NamedTypeNotation;
             if (doc.type !== "class" &&
                 doc.type !== "delegate" &&
                 doc.type !== "enumeration" &&
@@ -151,11 +153,11 @@ async function main() {
                 map.delete(match[1]);
                 duplications.add(match[1]);
             };
-            map.set(match[1], name);
+            map.set(match[1], doc.camelId);
         }
 
         for (let duplication of duplications) {
-            map.set(duplication, "any /* unmapped */");
+            map.set(duplication, `any /* unmapped: ${duplication} */`);
         }
         return map;
     }
@@ -618,7 +620,7 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
             arrayIndication = true;
             typeName = typeName.slice(9);
         }
-        
+
         typeName = typeLinker(typeName);
 
         if (arrayIndication) {
@@ -638,7 +640,7 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
         } as FunctionSignature;
         let outParameters: DescribedKeyTypePair[] = [];
         let codeSnippetArgs = extractCallArguments(signature.codeSnippet, name);
-        
+
         for (let i = 0; i < signature.parameters.length; i++) {
             let parameter = signature.parameters[i];
             let arg = codeSnippetArgs[i];

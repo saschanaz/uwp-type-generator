@@ -1,4 +1,4 @@
-﻿import * as fs from "fs"
+﻿import * as fs from "fs";
 
 export function readDirectory(path: string) {
     return new Promise<string[]>((resolve, reject) => {

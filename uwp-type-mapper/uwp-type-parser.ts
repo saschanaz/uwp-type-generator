@@ -8,14 +8,17 @@ export interface TypeNotation {
     description: string;
     type: string;
 }
+export interface NamedTypeNotation extends TypeNotation {
+    camelId: string;
+}
 
-export interface FunctionTypeNotation {
+export interface FunctionTypeNotation extends NamedTypeNotation {
     description: ""; // describe in signature object
     type: "function";
     signatures: FunctionSignature[];
 }
-export interface DelegateTypeNotation {
-    description: "";
+export interface DelegateTypeNotation extends NamedTypeNotation {
+    description: string;
     type: "delegate";
     signature: FunctionSignature;
 }
@@ -32,18 +35,15 @@ export interface DescribedKeyTypePair {
     key: string;
 }
 
-export interface EventTypeNotation {
-    description: string;
+export interface EventTypeNotation extends NamedTypeNotation {
     type: "event";
     delegate: string;
 }
-export interface StructureTypeNotation {
-    description: string;
+export interface StructureTypeNotation extends NamedTypeNotation {
     type: "structure";
     members: DescribedKeyTypePair[];
 }
-export interface NamespaceDocumentNotation {
-    description: string;
+export interface NamespaceDocumentNotation extends NamedTypeNotation {
     type: "namespace";
     members: {
         structures: string[];
@@ -78,7 +78,7 @@ async function parseAsMap() {
         // ...
     }
     */
-    let referenceMap = new Map<string, TypeNotation>();
+    let referenceMap = new Map<string, NamedTypeNotation>();
 
     let referencepath = "../referencedocs";
     let mshelppath = "ms-xhelp:///?Id=T%3a";
@@ -100,23 +100,25 @@ async function parseAsMap() {
             let text = await fspromise.readFile(`${referencepath}/${filepath}`);
             let doc = jsdom.jsdom(text) as Document;
             let metaHelpId = doc.head.querySelector("meta[name=Microsoft\\.Help\\.Id]") as HTMLMetaElement;
-            if (!metaHelpId)
+            if (!metaHelpId) {
                 continue;
-            let helpId = metaHelpId.content.toLowerCase();
+            }
+            let camelId = metaHelpId.content;
             let categoryJs = Array.from(doc.head.querySelectorAll("meta[name=Microsoft\\.Help\\.Category]")).filter((meta: HTMLMetaElement) => meta.content === "DevLang:javascript")[0];
-            let startIndex = helpId.indexOf(":windows");
+            let startIndex = camelId.indexOf(":Windows");
             if (startIndex !== -1) {
-                helpId = removeTick(helpId.slice(startIndex + 1));
+                camelId = removeTick(camelId.slice(startIndex + 1));
             }
             else {
                 skippedById.push(doc.title);
                 continue;
             }
-            if (!categoryJs || helpId.startsWith("windows.ui.xaml")) {
+            if (!categoryJs || camelId.startsWith("Windows.UI.Xaml")) {
                 skippedById.push(doc.title);
                 continue; // Do not parse XAML API
             }
             // TODO: use target language meta tag? it can only be used with VS document
+            let lowerCaseId = camelId.toLowerCase();
             let mainSection = doc.body.querySelector("div#mainSection") as HTMLDivElement;
             let mainContent = mainSection.textContent
             let description = getFirstParagraphText(mainSection.firstElementChild, "H2");
@@ -125,24 +127,27 @@ async function parseAsMap() {
             if (title.endsWith(" class")) {
                 // https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.background.smartcardtrigger.aspx
 
-                referenceMap.set(helpId, {
+                referenceMap.set(lowerCaseId, {
                     description,
-                    type: "class"
-                } as TypeNotation);
+                    type: "class",
+                    camelId
+                });
             }
             else if (title.endsWith(" attribute")) {
-                referenceMap.set(helpId, {
+                referenceMap.set(lowerCaseId, {
                     description,
-                    type: "attribute"
-                } as TypeNotation); 
+                    type: "attribute",
+                    camelId
+                }); 
             }
             else if (title.endsWith(" enumeration")) {
                 // Example URL: https://msdn.microsoft.com/en-us/library/windows/apps/windows.devices.pointofservice.posprintercartridgesensors.aspx
 
-                referenceMap.set(helpId, {
+                referenceMap.set(lowerCaseId, {
                     description,
-                    type: "enumeration"
-                } as TypeNotation);
+                    type: "enumeration",
+                    camelId
+                });
 
                 let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Members"))[0];
                 let table = before.nextElementSibling.nextElementSibling as HTMLTableElement;
@@ -157,9 +162,10 @@ async function parseAsMap() {
                     let nameCol = row.children[0] as HTMLTableColElement;
                     let descCol = row.children[2] as HTMLTableColElement;
                     if (nameCol.children.length > 1) {
-                        referenceMap.set(`${helpId}.${nameCol.children[1].textContent.trim().toLowerCase()}`, {
+                        referenceMap.set(`${lowerCaseId}.${nameCol.children[1].textContent.trim().toLowerCase()}`, {
                             description: getFirstParagraphText(descCol.firstElementChild),
-                            type: "Number"
+                            type: "Number",
+                            camelId
                         });
                     }
                     else if (categoryJs) {
@@ -169,14 +175,15 @@ async function parseAsMap() {
 
             }
             else if (title.endsWith(" namespace")) {
-                let notation = {
+                let notation: NamespaceDocumentNotation = {
                     description,
                     type: "namespace",
                     members: {
                         structures: [],
                         delegates: []
-                    }
-                } as NamespaceDocumentNotation;
+                    },
+                    camelId
+                };
                 let result = dombox.packByHeader(mainSection);
                 
                 if (result.subheaders["Members"]) {
@@ -224,7 +231,7 @@ async function parseAsMap() {
                     }
                 }
 
-                referenceMap.set(helpId, notation);
+                referenceMap.set(lowerCaseId, notation);
             }
             else if (title.endsWith(" property")) {
                 // example URL: https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.background.smartcardtrigger.triggertype.aspx
@@ -234,13 +241,14 @@ async function parseAsMap() {
                 let type = exportJavaScriptTypeNotation(parseTypeNotationElement(typeNotationParagraph as HTMLParagraphElement));
                 if (!type) {
                     // JS incompatble
-                    continue;
+                    throw new Error("Expected a JavaScript-compatible type but not found");
                 }
 
-                referenceMap.set(helpId, {
+                referenceMap.set(lowerCaseId, {
                     description,
-                    type
-                } as TypeNotation);
+                    type,
+                    camelId
+                });
             }
             else if (title.endsWith(" delegate")) {
                 // example URL: https://msdn.microsoft.com/en-us/library/windows/apps/br206577.aspx, https://msdn.microsoft.com/en-us/library/windows/apps/br225997.aspx
@@ -261,14 +269,15 @@ async function parseAsMap() {
                 signature.parameters = parseParameterList(parameterListElement);
                 if (!signature.parameters) {
                     // JS incompatible
-                    continue;
+                    throw new Error("Expected a JavaScript-compatible type but not found");
                 }
 
-                referenceMap.set(helpId, {
+                (referenceMap as Map<string, DelegateTypeNotation>).set(lowerCaseId, {
                     description,
                     type: "delegate",
-                    signature
-                } as DelegateTypeNotation);
+                    signature,
+                    camelId
+                });
             }
             else if (title.endsWith(" constructor")) {
                 // example URL
@@ -280,9 +289,9 @@ async function parseAsMap() {
                 // https://msdn.microsoft.com/en-us/library/windows/apps/dn631282.aspx
 
                 
-                let ctorIndex = helpId.indexOf(".#ctor");
+                let ctorIndex = lowerCaseId.indexOf(".#ctor");
                 if (ctorIndex !== -1) {
-                    helpId = `${helpId.slice(0, ctorIndex)}.constructor`;
+                    lowerCaseId = `${lowerCaseId.slice(0, ctorIndex)}.constructor`;
                 }
                 else {
                     debugger;
@@ -302,17 +311,18 @@ async function parseAsMap() {
                 signature.parameters = parseParameterList(parameterListElement);
                 if (!signature.parameters) {
                     // JS incompatible
-                    continue;
+                    throw new Error("Expected a JavaScript-compatible type but not found");
                 }
 
-                let notation = referenceMap.get(helpId) as FunctionTypeNotation || {
+                let notation: FunctionTypeNotation = referenceMap.get(lowerCaseId) as FunctionTypeNotation || {
                     description: "", // 
                     type: "function",
-                    signatures: []
-                } as FunctionTypeNotation;
+                    signatures: [],
+                    camelId
+                };
                 notation.signatures.push(signature);
 
-                referenceMap.set(helpId, notation);
+                referenceMap.set(lowerCaseId, notation);
                 // Note: replace .#ctor(params) to .constructor
             }
             else if (title.endsWith(" method")) {
@@ -324,9 +334,9 @@ async function parseAsMap() {
                 let syntaxHeader = result.subheaders["Syntax"];
                 signature.codeSnippet = syntaxHeader.children.filter((element) => element.tagName === "CODESNIPPET" && element.getAttribute("language") === "JavaScript")[0].textContent;
 
-                let parentheses = parenthesisRegex.exec(helpId);
+                let parentheses = parenthesisRegex.exec(lowerCaseId);
                 if (parentheses) {
-                    helpId = helpId.slice(0, parentheses.index);
+                    lowerCaseId = lowerCaseId.slice(0, parentheses.index);
                 } // may exist when with params, may not when without
                 
                 let parameterListElement = result.subheaders["Parameters"].children[0] as HTMLDListElement;
@@ -349,7 +359,7 @@ async function parseAsMap() {
                         signature.return = {
                             description: inline(typeDescriptionElement.textContent),
                             type
-                        } as TypeNotation;
+                        };
                     }
                     else {
                         // Some document has "Return value" header but does not have type notation
@@ -358,19 +368,20 @@ async function parseAsMap() {
                         signature.return = {
                             description: "",
                             type: "unknown"
-                        } as TypeNotation;
+                        };
                     }
 
                 }
 
-                let notation = referenceMap.get(helpId) as FunctionTypeNotation || {
+                let notation: FunctionTypeNotation = referenceMap.get(lowerCaseId) as FunctionTypeNotation || {
                     description: "", // 
                     type: "function",
-                    signatures: []
-                } as FunctionTypeNotation;
+                    signatures: [],
+                    camelId
+                };
                 notation.signatures.push(signature);
 
-                referenceMap.set(helpId, notation);
+                referenceMap.set(lowerCaseId, notation);
                 // insert FunctionTypeNotation, and later check same key exists and append more signatures
             }
             else if (title.endsWith(" event")) {
@@ -399,11 +410,12 @@ async function parseAsMap() {
                 if (!eventListener || !onevent) {
                     throw new Error("Expected both event listener/onevent syntax but not found");
                 }
-                referenceMap.set(addOnPrefixOnHelpId(helpId), {
+                (referenceMap as Map<string, EventTypeNotation>).set(addOnPrefixOnHelpId(lowerCaseId), {
                     description,
                     type: "event",
-                    delegate
-                } as EventTypeNotation);
+                    delegate,
+                    camelId
+                });
             }
             else if (title.endsWith(" structure")) {
                 /*
@@ -413,14 +425,15 @@ async function parseAsMap() {
                 
                 Namespace should reference them so that mapper can know
                 */
-                let notation = {
+                let notation: StructureTypeNotation = {
                     description,
                     type: "structure",
-                    members: []
-                } as StructureTypeNotation;
+                    members: [],
+                    camelId
+                };
 
-                let membersHeader2 = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Members"))[0];
-                let tableOrList = membersHeader2.nextElementSibling.nextElementSibling;
+                let membersHeader = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Members"))[0];
+                let tableOrList = membersHeader.nextElementSibling.nextElementSibling;
                 let table: HTMLTableElement;
                 if (tableOrList.tagName === "UL") {
                     // Rich structure (not in JS)
@@ -436,7 +449,7 @@ async function parseAsMap() {
 
                 if (!table) {
                     // empty structure (will be written as 'any' later")
-                    referenceMap.set(helpId, notation);
+                    referenceMap.set(lowerCaseId, notation);
                     continue;
                 }
 
@@ -451,7 +464,7 @@ async function parseAsMap() {
                         type: memberType
                     });
                 }
-                referenceMap.set(helpId, notation);
+                referenceMap.set(lowerCaseId, notation);
             }
             else if (title.endsWith(" interface")) {
                 continue;

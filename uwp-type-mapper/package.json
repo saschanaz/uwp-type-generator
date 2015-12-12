@@ -8,6 +8,6 @@
         "name": "saschanaz"
     },
     "dependencies": {
-        "jsdom": "latest"
+        "jsdom": "~7.2.1"
     }
 }
