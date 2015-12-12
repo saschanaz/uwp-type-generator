@@ -737,7 +737,7 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
                 throw new Error("Unexpected string return type");
             }
             else if (returnType.type.endsWith("Operation")) {
-                returnType.type = `Windows.Foundation.IPromiseWithOperation<${returnType.type}>`;
+                returnType.type = `Windows.Foundation.IPromiseWithOperation<any /* unmapped */,${returnType.type}>`;
             }
             else if (returnType.type.startsWith("Windows.Foundation.IAsync")) {
                 // alias type IPromiseWithIAsyncOperation<TResult> = IPromiseWithOperation<TResult, IAsyncOperation<TResult>>, etc
