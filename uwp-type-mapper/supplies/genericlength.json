@@ -1,0 +1,7 @@
+{
+    "Windows.Foundation.Collections.IKeyValuePair": 2,
+    "Windows.Foundation.Collections.IMap": 2,
+    "Windows.Foundation.Collections.IMapView": 2,
+    "Windows.Foundation.Collections.IVector": 1,
+    "Windows.Foundation.Collections.IVectorView": 1
+}

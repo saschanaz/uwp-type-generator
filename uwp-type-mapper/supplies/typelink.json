@@ -4,6 +4,7 @@
     "DateTime": "Date",
     "Double": "number",
     "Guid": "string",
+    "IReadOnlyList": "Windows.Foundation.Collections.IVectorView",
     "Int16": "number",
     "Int32": "number",
     "Int64": "number",

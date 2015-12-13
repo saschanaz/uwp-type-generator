@@ -55,15 +55,15 @@ async function main() {
     if (!(await fspromise.exists("supplies/typelink.json"))) {
         throw new Error("Expected supplies/typelink.json file but the path is not found");
     }
+    if (!(await fspromise.exists("supplies/genericlength.json"))) {
+        throw new Error("Expected supplies/genericlength.json file but the path is not found");
+    }
     let prepend = await fspromise.readFile("supplies/prepend.d.ts");
     let typelink = JSON.parse(await fspromise.readFile("supplies/typelink.json"));
-    {
-        let temp = {} as any;
-        for (let name of Object.getOwnPropertyNames(typelink).sort()) {
-            temp[name] = typelink[name];
-        }
-        await fspromise.writeFile("supplies/typelink.json", JSON.stringify(temp, undefined, 4));
-    }
+    let typeParameterLengthMap = JSON.parse(await fspromise.readFile("supplies/genericlength.json"));
+
+    await fspromise.writeFile("supplies/typelink.json", JSON.stringify(sortMembers(typelink), undefined, 4));
+    await fspromise.writeFile("supplies/genericlength.json", JSON.stringify(sortMembers(typeParameterLengthMap), undefined, 4));
 
     console.log("Loading documentations...");
     let docs = await loadDocs("--force-reparse" in args)
@@ -89,8 +89,10 @@ async function main() {
     function tryLinkType(typeName: string) {
         let typeNameRegex = /[\w\.]+/g;
         let remainingTypeParameterSyntaxRegex = /^<(.+)>$/;
+        let interfaceMarkerRegex = /\.I([A-Z]\w+)/;
         // let requiredTypeParameterNotExistRegex = /IVectorView(?:,|>|$)/
 
+        let references: string[] = [];
         let result = typeName.replace(typeNameRegex, (match) => {
             let lowerCase = match.toLowerCase();
             if (nameMap.has(lowerCase)) {
@@ -98,23 +100,28 @@ async function main() {
                 lowerCase = match.toLowerCase();
             }
             let linkedType = typelink[match];
-            if (linkedType != null) {
+            if (typeof linkedType === "string") {
                 // force linking even if there is a document (for e.g. Windows.Foundation.TimeSpan)
-                return linkedType;
+                match = linkedType;
+                lowerCase = linkedType.toLowerCase();
             }
 
             let doc = docs[lowerCase];
             if (doc && doc.type !== "interfacedummy") {
+                references.push(match);
                 return match;
             }
-            let interfaceMatch = match.match(/\.I([A-Z]\w+)/);
+            let interfaceMatch = match.match(interfaceMarkerRegex);
             if (!interfaceMatch) {
+                references.push(match);
                 return match;
             }
-            let valueName = match.replace(/\.I([A-Z]\w+)/, ".$1");
+            let valueName = match.replace(interfaceMarkerRegex, ".$1");
             if (valueName.toLowerCase() in docs) {
+                references.push(valueName);
                 return valueName;
             }
+            references.push(match);
             return match;
         });
 
@@ -122,6 +129,31 @@ async function main() {
         if (remainingGenericMatch) {
             // e.g. Windows.Foundation.IReference
             result = remainingGenericMatch[1];
+        }
+
+        for (let reference of references) {
+            let doc = docs[reference.toLowerCase()] as TypeNotation;
+            let typeParameterLength: number;
+            if (doc && doc.type === "delegate") {
+                let typeParameters = (doc as DelegateTypeNotation).signature.typeParameters;
+                if (!typeParameters) {
+                    continue;
+                }
+                typeParameterLength = typeParameters.length;
+            }
+            else
+            {
+                typeParameterLength = typeParameterLengthMap[reference];
+                if (!typeParameterLength) {
+                    continue;
+                }
+            }
+            let genericCheckerRegex = new RegExp(`${reference}(?:,|>|$)`);
+            let genericCheckerMatch = result.match(genericCheckerRegex);
+            if (genericCheckerMatch) {
+                let insertPosition = genericCheckerMatch.index + reference.length;
+                result = `${result.slice(0, insertPosition)}${generateAnyTypeParameters(typeParameterLength)}${result.slice(insertPosition)}`;
+            }
         }
 
         return result;
@@ -164,6 +196,19 @@ async function main() {
             map.set(duplication, `any /* unmapped: ${duplication} */`);
         }
         return map;
+    }
+    function generateAnyTypeParameters(length: number) {
+        let anys = new Array(length).fill("any /* unmapped */");
+        return `<${anys.join(', ')}>`;
+    }
+
+
+    function sortMembers(object: any) {
+        let temp = {} as any;
+        for (let name of Object.getOwnPropertyNames(object).sort()) {
+            temp[name] = object[name];
+        }
+        return temp;
     }
 }
 
