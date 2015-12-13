@@ -8,7 +8,85 @@ declare interface WinRTEvent<TSender> {
     type: string;
 }
 
-
+declare namespace Windows.ApplicationModel {
+    namespace Activation {
+        interface IActivatedEventArgs { /* TODO */ }
+    }
+    namespace Background {
+        interface IBackgroundCondition { /* TODO */ }
+        interface IBackgroundTaskInstance { /* TODO */ }
+        interface IBackgroundTrigger { /* TODO */ }
+    }
+}
+declare namespace Windows.Data.Xml.Dom {
+    interface IXmlNodeSelector {
+        selectSingleNode(xpath: string): Windows.Data.Xml.Dom.IXmlNode;
+        selectNodes(xpath: string): Windows.Data.Xml.Dom.XmlNodeList;
+        selectSingleNodeNS(xpath: string, namespaces: any): Windows.Data.Xml.Dom.IXmlNode;
+        selectNodesNS(xpath: string, namespaces: any): Windows.Data.Xml.Dom.XmlNodeList;
+    }
+    interface IXmlNodeSerializer {
+        innerText: string;
+        getXml(): string;
+    }
+    interface IXmlNode extends Windows.Data.Xml.Dom.IXmlNodeSelector, Windows.Data.Xml.Dom.IXmlNodeSerializer {
+        attributes: Windows.Data.Xml.Dom.XmlNamedNodeMap;
+        childNodes: Windows.Data.Xml.Dom.XmlNodeList;
+        firstChild: Windows.Data.Xml.Dom.IXmlNode;
+        lastChild: Windows.Data.Xml.Dom.IXmlNode;
+        localName: any;
+        namespaceUri: any;
+        nextSibling: Windows.Data.Xml.Dom.IXmlNode;
+        nodeName: string;
+        nodeType: Windows.Data.Xml.Dom.NodeType;
+        nodeValue: any;
+        ownerDocument: Windows.Data.Xml.Dom.XmlDocument;
+        parentNode: Windows.Data.Xml.Dom.IXmlNode;
+        prefix: any;
+        previousSibling: Windows.Data.Xml.Dom.IXmlNode;
+        hasChildNodes(): boolean;
+        insertBefore(newChild: Windows.Data.Xml.Dom.IXmlNode, referenceChild: Windows.Data.Xml.Dom.IXmlNode): Windows.Data.Xml.Dom.IXmlNode;
+        replaceChild(newChild: Windows.Data.Xml.Dom.IXmlNode, referenceChild: Windows.Data.Xml.Dom.IXmlNode): Windows.Data.Xml.Dom.IXmlNode;
+        removeChild(childNode: Windows.Data.Xml.Dom.IXmlNode): Windows.Data.Xml.Dom.IXmlNode;
+        appendChild(newChild: Windows.Data.Xml.Dom.IXmlNode): Windows.Data.Xml.Dom.IXmlNode;
+        cloneNode(deep: boolean): Windows.Data.Xml.Dom.IXmlNode;
+        normalize(): void;
+    }
+}
+declare namespace Windows.Devices {
+    namespace Adc.Provider {
+        interface IAdcProvider { /* TODO */ }
+    }
+    namespace AllJoyn {
+        interface IAllJoynAcceptSessionJoiner { /* TODO */ }
+    }
+    namespace Enumeration {
+        interface IDevicePairingSettings { /* TODO */ }
+    }
+    namespace Geolocation {
+        interface IGeoshape { /* TODO */ }
+    }
+    namespace Gpio.Provider {
+        interface IGpioProvider { /* TODO */ }
+    }
+    namespace I2c.Provider {
+        interface II2cProvider { /* TODO */ }
+    }
+    namespace Midi {
+        interface IMidiMessage { /* TODO */ }
+    }
+    namespace Perception.Provider {
+        interface IPerceptionFrameProvider { /* TODO*/ }
+        interface IPerceptionFrameProviderManager { /* TODO */ }
+    }
+    namespace Sensors {
+        interface ISensorDataThreshold { /* TODO */ }
+    }
+    namespace Sms {
+        interface ISmsMessage { /* TODO */ }
+        interface ISmsMessageBase { /* TODO */ }
+    }
+}
 declare namespace Windows.Foundation {
     interface IPromise<TResult> {
         then<U>(success?: (value: TResult) => IPromise<U>, error?: (error: any) => IPromise<U>, progress?: (progress: any) => void): IPromise<U>;
@@ -48,6 +126,7 @@ declare namespace Windows.Foundation {
     interface IClosable {
         close(): void;
     }
+    interface IMemoryBufferReference { /* TODO */ }
 
     namespace Collections {
         export interface IIterable<T> {
@@ -58,6 +137,32 @@ declare namespace Windows.Foundation {
             hasCurrent: boolean;
             moveNext(): boolean;
             getMany(): { items: T[]; returnValue: number; };
+        }
+        interface IKeyValuePair<K, V> {
+            key: K;
+            value: V;
+        }
+        interface IMap<K, V> extends Windows.Foundation.Collections.IIterable<Windows.Foundation.Collections.IKeyValuePair<K, V>> {
+            size: number;
+            lookup(key: K): V;
+            hasKey(key: K): boolean;
+            getView(): Windows.Foundation.Collections.IMapView<K, V>;
+            insert(key: K, value: V): boolean;
+            remove(key: K): void;
+            clear(): void;
+        }
+        interface IMapView<K, V> extends Windows.Foundation.Collections.IIterable<Windows.Foundation.Collections.IKeyValuePair<K, V>> {
+            size: number;
+            lookup(key: K): V;
+            hasKey(key: K): boolean;
+            split(): { first: Windows.Foundation.Collections.IMapView<K, V>; second: Windows.Foundation.Collections.IMapView<K, V>; };
+        }
+        interface IMapChangedEventArgs<T> { /* TODO */ }
+        interface IObservableVector<T> extends Windows.Foundation.Collections.IVector<T>, Windows.Foundation.Collections.IIterable<T> {
+            onvectorchanged: any/* TODO */;
+        }
+        interface IObservableMap<K, V> extends Windows.Foundation.Collections.IMap<K, V>, Windows.Foundation.Collections.IIterable<Windows.Foundation.Collections.IKeyValuePair<K, V>> {
+            onmapchanged: any/* TODO */;
         }
         interface IVectorView<T> extends Windows.Foundation.Collections.IIterable<T>, Array<T> {
             size: number;
@@ -79,31 +184,77 @@ declare namespace Windows.Foundation {
             getMany(startIndex: number): { items: T[]; returnValue: number; };
             replaceAll(items: T[]): void;
         }
-        export interface IKeyValuePair<K, V> {
-            key: K;
-            value: V;
+        interface IVectorChangedEventArgs {
+            collectionChange: Windows.Foundation.Collections.CollectionChange;
+            index: number;
         }
-        export interface IMap<K, V> extends Windows.Foundation.Collections.IIterable<Windows.Foundation.Collections.IKeyValuePair<K, V>> {
-            size: number;
-            lookup(key: K): V;
-            hasKey(key: K): boolean;
-            getView(): Windows.Foundation.Collections.IMapView<K, V>;
-            insert(key: K, value: V): boolean;
-            remove(key: K): void;
-            clear(): void;
+    }
+}
+declare namespace Windows.Gaming {
+    namespace Input {
+        interface IGameController { /* TODO */ }
+    }
+}
+declare namespace Windows.Globalization {
+    namespace NumberFormatting {
+        interface INumberRounder { /* TODO */ }
+    }
+}
+declare namespace Windows.Graphics {
+    namespace DirectX.Direct3D11 {
+        interface IDirect3DSurface { /* TODO */ }
+    }
+    namespace Printing {
+        interface IPrintDocumentSource { /* TODO */ }
+        namespace OptionDetails {
+            interface IPrintOptionDetails { /* TODO */ }
         }
-        export interface IMapView<K, V> extends Windows.Foundation.Collections.IIterable<Windows.Foundation.Collections.IKeyValuePair<K, V>> {
-            size: number;
-            lookup(key: K): V;
-            hasKey(key: K): boolean;
-            split(): { first: Windows.Foundation.Collections.IMapView<K, V>; second: Windows.Foundation.Collections.IMapView<K, V>; };
-        }
-        export interface IObservableVector<T> extends Windows.Foundation.Collections.IVector<T>, Windows.Foundation.Collections.IIterable<T> {
-            onvectorchanged: any/* TODO */;
-        }
-        export interface IObservableMap<K, V> extends Windows.Foundation.Collections.IMap<K, V>, Windows.Foundation.Collections.IIterable<Windows.Foundation.Collections.IKeyValuePair<K, V>> {
-            onmapchanged: any/* TODO */;
-        }
+    }
+}
+declare namespace Windows.Media {
+    interface IMediaExtension { /* TODO */ }
+    interface IMediaMarker { /* TODO */ }
+    namespace Audio {
+        interface IAudioNode { /* TODO */ }
+    }
+    namespace Core {
+        interface ISingleSelectMediaTrackList { /* TODO */ }
+        interface IMediaCue { /* TODO */ }
+        interface IMediaStreamDescriptor { /* TODO */ }
+        interface MseStreamSource { /* TODO, this class is inaccessible on JS environment */ }
+    }
+    namespace MediaProperties {
+        interface IMediaEncodingProperties { /* TODO */ }
+    }
+    namespace Playback {
+        interface IMediaPlaybackSource { /* TODO */ }
+    }
+    namespace Protection.PlayReady {
+        interface INDClosedCaptionDataReceivedEventArgs { /* TODO */ }
+        interface INDDownloadEngine { /* TODO */ }
+        interface INDLicenseFetchCompletedEventArgs { /* TODO */ }
+        interface INDLicenseFetchResult { /* TODO */ }
+        interface INDMessenger { /* TODO */ }
+        interface INDProximityDetectionCompletedEventArgs { /* TODO */ }
+        interface INDRegistrationCompletedEventArgs { /* TODO */ }
+        interface INDSendResult { /* TODO */ }
+        interface INDStartResult { /* TODO */ }
+        interface INDStreamParser { /* TODO */ }
+        interface IMediaProtectionServiceRequest { /* TODO */ }
+        interface IPlayReadyServiceRequest { /* TODO */ }
+    }
+    namespace SpeechRecognition {
+        interface ISpeechRecognitionConstraint { /* TODO */ }
+    }
+}
+declare namespace Windows.Networking {
+    namespace Sockets {
+        interface IWebSocket { /* TODO */ }
+    }
+}
+declare namespace Windows.Security {
+    namespace Authentication.Web.Provider {
+        interface IWebAccountProviderOperation { /* TODO */ }
     }
 }
 declare namespace Windows.Storage {
@@ -119,6 +270,21 @@ declare namespace Windows.Storage {
         getBasicPropertiesAsync(): Windows.Foundation.IAsyncOperation<Windows.Storage.FileProperties.BasicProperties>;
         isOfType(type: Windows.Storage.StorageItemTypes): boolean;
     }
+    namespace BulkAccess {
+        interface IStorageItemInformation {
+            basicProperties: Windows.Storage.FileProperties.BasicProperties;
+            documentProperties: Windows.Storage.FileProperties.DocumentProperties;
+            imageProperties: Windows.Storage.FileProperties.ImageProperties;
+            musicProperties: Windows.Storage.FileProperties.MusicProperties;
+            thumbnail: Windows.Storage.FileProperties.StorageItemThumbnail;
+            videoProperties: Windows.Storage.FileProperties.VideoProperties;
+            onthumbnailupdated: any/* TODO */;
+            onpropertiesupdated: any/* TODO */;
+        }
+    }
+    namespace Search {
+        interface IStorageQueryResultBase { /* TODO */ }
+    }
     namespace Streams {
         interface IBuffer {
             capacity: number;
@@ -133,38 +299,16 @@ declare namespace Windows.Storage {
         }
     }
 }
-declare namespace Windows.Data.Xml.Dom {
-    interface IXmlNodeSelector {
-        selectSingleNode(xpath: string): Windows.Data.Xml.Dom.IXmlNode;
-        selectNodes(xpath: string): Windows.Data.Xml.Dom.XmlNodeList;
-        selectSingleNodeNS(xpath: string, namespaces: any): Windows.Data.Xml.Dom.IXmlNode;
-        selectNodesNS(xpath: string, namespaces: any): Windows.Data.Xml.Dom.XmlNodeList;
+declare namespace Windows.UI {
+    namespace Input {
+        interface IPointerPointTransform { /* TODO */ }
     }
-    interface IXmlNodeSerializer {
-        innerText: string;
-        getXml(): string;
-    }
-    interface IXmlNode extends Windows.Data.Xml.Dom.IXmlNodeSelector, Windows.Data.Xml.Dom.IXmlNodeSerializer {
-        attributes: Windows.Data.Xml.Dom.XmlNamedNodeMap;
-        childNodes: Windows.Data.Xml.Dom.XmlNodeList;
-        firstChild: Windows.Data.Xml.Dom.IXmlNode;
-        lastChild: Windows.Data.Xml.Dom.IXmlNode;
-        localName: any;
-        namespaceUri: any;
-        nextSibling: Windows.Data.Xml.Dom.IXmlNode;
-        nodeName: string;
-        nodeType: Windows.Data.Xml.Dom.NodeType;
-        nodeValue: any;
-        ownerDocument: Windows.Data.Xml.Dom.XmlDocument;
-        parentNode: Windows.Data.Xml.Dom.IXmlNode;
-        prefix: any;
-        previousSibling: Windows.Data.Xml.Dom.IXmlNode;
-        hasChildNodes(): boolean;
-        insertBefore(newChild: Windows.Data.Xml.Dom.IXmlNode, referenceChild: Windows.Data.Xml.Dom.IXmlNode): Windows.Data.Xml.Dom.IXmlNode;
-        replaceChild(newChild: Windows.Data.Xml.Dom.IXmlNode, referenceChild: Windows.Data.Xml.Dom.IXmlNode): Windows.Data.Xml.Dom.IXmlNode;
-        removeChild(childNode: Windows.Data.Xml.Dom.IXmlNode): Windows.Data.Xml.Dom.IXmlNode;
-        appendChild(newChild: Windows.Data.Xml.Dom.IXmlNode): Windows.Data.Xml.Dom.IXmlNode;
-        cloneNode(deep: boolean): Windows.Data.Xml.Dom.IXmlNode;
-        normalize(): void;
+}
+declare namespace Windows.Web {
+    namespace Http {
+        interface IHttpContent { /* TODO */ }
+        namespace Filters {
+            interface IHttpFilter { /* TODO */ }
+        }
     }
 }
