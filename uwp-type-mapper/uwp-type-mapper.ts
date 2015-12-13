@@ -88,12 +88,14 @@ async function main() {
 
     function tryLinkType(typeName: string) {
         let typeNameRegex = /[\w\.]+/g;
-        let remainingGenericSyntax = /^<(.+)>$/;
+        let remainingTypeParameterSyntaxRegex = /^<(.+)>$/;
+        // let requiredTypeParameterNotExistRegex = /IVectorView(?:,|>|$)/
 
         let result = typeName.replace(typeNameRegex, (match) => {
             let lowerCase = match.toLowerCase();
             if (nameMap.has(lowerCase)) {
                 match = nameMap.get(lowerCase);
+                lowerCase = match.toLowerCase();
             }
             let linkedType = typelink[match];
             if (linkedType != null) {
@@ -101,7 +103,8 @@ async function main() {
                 return linkedType;
             }
 
-            if (match.toLowerCase() in docs) {
+            let doc = docs[lowerCase];
+            if (doc && doc.type !== "interfacedummy") {
                 return match;
             }
             let interfaceMatch = match.match(/\.I([A-Z]\w+)/);
@@ -115,7 +118,7 @@ async function main() {
             return match;
         });
 
-        let remainingGenericMatch = result.match(remainingGenericSyntax);
+        let remainingGenericMatch = result.match(remainingTypeParameterSyntaxRegex);
         if (remainingGenericMatch) {
             // e.g. Windows.Foundation.IReference
             result = remainingGenericMatch[1];
@@ -142,7 +145,8 @@ async function main() {
             if (doc.type !== "class" &&
                 doc.type !== "delegate" &&
                 doc.type !== "enumeration" &&
-                doc.type !== "structure") {
+                doc.type !== "structure" &&
+                doc.type !== "interfacedummy") {
 
                 continue;
             }

@@ -113,16 +113,25 @@ async function parseAsMap() {
                 skippedById.push(doc.title);
                 continue;
             }
-            if (!categoryJs || camelId.startsWith("Windows.UI.Xaml")) {
-                skippedById.push(doc.title);
-                continue; // Do not parse XAML API
-            }
-            // TODO: use target language meta tag? it can only be used with VS document
             let lowerCaseId = camelId.toLowerCase();
             let mainSection = doc.body.querySelector("div#mainSection") as HTMLDivElement;
             let mainContent = mainSection.textContent
             let description = getFirstParagraphText(mainSection.firstElementChild, "H2");
             let title = doc.body.querySelector("div.title").textContent.trim();
+            
+            if (!categoryJs || camelId.startsWith("Windows.UI.Xaml") /* Do not parse XAML API */) {
+                if (title.endsWith(" interface")) {
+                    referenceMap.set(lowerCaseId, {
+                        description,
+                        type: "interfacedummy",
+                        camelId
+                    });
+                }
+                else {
+                    skippedById.push(camelId);
+                }
+                continue;
+            }
 
             if (title.endsWith(" class")) {
                 // https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.background.smartcardtrigger.aspx
@@ -734,9 +743,11 @@ async function parseAsMap() {
         return text.trim().replace(whitespaceRepeatRegex, " ");
     }
     function removeTick(typeName: string) {
-        let backtickIndex = typeName.indexOf("`");
-        if (backtickIndex !== -1) {
-            typeName = typeName.slice(0, backtickIndex);
+        let backtickRegex = /`[0-9]+/;
+        let backtickMatch = typeName.match(backtickRegex);
+        while (backtickMatch) {
+            typeName = `${typeName.slice(0, backtickMatch.index)}${typeName.slice(backtickMatch.index + backtickMatch[0].length)}`;
+            backtickMatch = typeName.match(backtickRegex);
         }
         return typeName;
     }
