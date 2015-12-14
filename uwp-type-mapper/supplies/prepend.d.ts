@@ -86,6 +86,9 @@ declare namespace Windows.Devices {
         interface ISmsMessage { /* TODO */ }
         interface ISmsMessageBase { /* TODO */ }
     }
+    namespace Spi.Provider {
+        interface ISpiProvider { /* TODO */ }
+    }
 }
 declare namespace Windows.Foundation {
     interface IPromise<TResult> {

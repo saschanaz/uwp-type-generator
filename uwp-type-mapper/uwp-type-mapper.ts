@@ -72,7 +72,7 @@ async function main() {
     let iterations = JSON.parse(await fspromise.readFile(args["-i"]));
 
     console.log("Mapping...");
-    map(iterations, docs);
+    map(iterations, docs, nameMap);
 
     if (args["-mapout"]) {
         // for debugging purpose
@@ -212,7 +212,7 @@ async function main() {
     }
 }
 
-function map(parentIteration: TypeDescription, docs: any) {
+function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, string>) {
     /*
     interface mapping?
 
@@ -224,10 +224,13 @@ function map(parentIteration: TypeDescription, docs: any) {
     for referenced typename: if map.has(typeName) then namespace[typeName] = interfaceLiteralDescription;
     */
     let genericsRegex = /<(.+)>$/;
+    let typeNameRegex = /[\w\.]+/g;
 
     let nonValueTypeParentNamespaceMap = new Map<string, TypeDescription>();
     let typeReferenceSet = new Set<string>();
     typeReferenceSet.add("Windows.Foundation.EventHandler"); // documents reference this incorrectly
+    typeReferenceSet.add("Windows.Foundation.AsyncActionProgressHandler"); // only referenced from interfaces
+    typeReferenceSet.add("Windows.Foundation.AsyncActionWithProgressCompletedHandler"); // only referenced from interfaces
     mapItem(parentIteration);
 
     function mapItem(iteration: TypeDescription) {
@@ -270,7 +273,7 @@ function map(parentIteration: TypeDescription, docs: any) {
                         TODO: methods and onevents must be distingushable (by __type?)
                         Do FunctionDescription have to allow "function"|"?" <- What name? callback?
                          */
-                        typeReferenceSet.add(removeGenericsSyntax((doc as EventTypeNotation).delegate));
+                        rememberType((doc as EventTypeNotation).delegate);
                         iteration[itemName] = {
                             __fullname: fullName,
                             __type: "event",
@@ -279,7 +282,7 @@ function map(parentIteration: TypeDescription, docs: any) {
                         } as EventDescription;
                         break;
                     default: {
-                        typeReferenceSet.add(removeGenericsSyntax(doc.type));
+                        rememberType(doc.type);
                         iteration[itemName] = {
                             __fullname: fullName,
                             __type: doc.type,
@@ -346,6 +349,10 @@ function map(parentIteration: TypeDescription, docs: any) {
     }
 
     for (let typeReference of typeReferenceSet) {
+        let lowerCase = typeReference.toLowerCase();
+        if (nameMap.has(lowerCase)) {
+            typeReference = nameMap.get(lowerCase);
+        }
         let doc = docs[typeReference.toLowerCase()] as TypeNotation;
         if (!doc) {
             continue;
@@ -398,21 +405,20 @@ function map(parentIteration: TypeDescription, docs: any) {
     function rememberReferenceInSignatures(signatures: FunctionSignature[]) {
         for (let signature of signatures) {
             for (let parameter of signature.parameters) {
-                typeReferenceSet.add(removeGenericsSyntax(parameter.type));
+                rememberType(parameter.type);
             }
             if (signature.return && typeof signature.return !== "string") {
-                typeReferenceSet.add(removeGenericsSyntax((signature.return as TypeNotation).type));
+                rememberType((signature.return as TypeNotation).type);
             }
         }
         return signatures;
     }
 
-    function removeGenericsSyntax(text: string) {
-        let genericsMatch = text.match(genericsRegex);
-        if (genericsMatch) {
-            text = text.slice(0, genericsMatch.index);
+    function rememberType(typeReference: string) {
+        let matches = typeReference.match(typeNameRegex);
+        for (let match of matches) {
+            typeReferenceSet.add(match);
         }
-        return text;
     }
 }
 
