@@ -10,6 +10,11 @@ export interface TypeNotation {
 }
 export interface NamedTypeNotation extends TypeNotation {
     camelId: string;
+    codeSnippets?: CodeSnippet[];
+}
+export interface CodeSnippet {
+    language: string;
+    content: string;
 }
 
 export interface FunctionTypeNotation extends NamedTypeNotation {
@@ -135,11 +140,21 @@ async function parseAsMap() {
 
             if (title.endsWith(" class")) {
                 // https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.background.smartcardtrigger.aspx
+                // https://msdn.microsoft.com/en-us/library/windows/apps/windows.devices.enumeration.pnp.pnpobjectcollection.aspx
 
-                referenceMap.set(lowerCaseId, {
+                let result = dombox.packByHeader(mainSection);
+
+                let syntaxHeader = result.subheaders["Syntax"];
+                let codeSnippets = syntaxHeader.children.filter((element) => element.tagName === "CODESNIPPET").map<CodeSnippet>(element => ({
+                    language: element.getAttribute("language"),
+                    content: element.textContent
+                }));
+                
+                (referenceMap as Map<string, NamedTypeNotation>).set(lowerCaseId, {
                     description,
                     type: "class",
-                    camelId
+                    camelId,
+                    codeSnippets
                 });
             }
             else if (title.endsWith(" attribute")) {
