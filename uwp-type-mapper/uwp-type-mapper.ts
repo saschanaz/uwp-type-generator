@@ -537,8 +537,7 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
         if (!unconstructable) {
             let ctor = constructor.__constructor;
             for (let signature of (ctor as FunctionDescription).__signatures) {
-                // TODO: description for parameters
-                result += `${nextLevelIndent}/** ${signature.description} */\r\n`;
+                result += writeSingatureComment(indentRepeat + 1, signature);
                 result += `${nextLevelIndent}constructor(${writeParameters(signature)});\r\n`;
             }
         }
@@ -577,7 +576,7 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
                 for (let signature of tryNormalizeAsyncCallReturnType(member as FunctionDescription).__signatures) {
                     signature = normalizeSignature(signature, memberName);
                     // TODO: description for parameters
-                    result += `${indent}/** ${signature.description} */\r\n`;
+                    result += writeSingatureComment(indentRepeat, signature);
                     result += `${indent}${prefix}${memberName}(${writeParameters(signature)}): `;
                     let returnType = writeReturnType(signature);
                     if (returnType !== "unknown") {
@@ -648,6 +647,24 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
                 return normalizeTypeName(signatureReturn.type);
             }
         }
+    }
+    function writeSingatureComment(indentRepeat: number, signature: FunctionSignature) {
+        let indent = repeatIndent(indentBase, indentRepeat);
+        let result = `${indent}/**`;
+        if (signature.parameters.length === 0 && typeof signature.return !== "object") {
+            result += ` ${signature.description} */\r\n`
+            return result;
+        }
+        result += `\r\n${indent} * ${signature.description}\r\n`
+        for (let parameter of signature.parameters) {
+            result += `${indent} * @param ${parameter.key} ${parameter.description}\r\n`;
+        }
+        let ret = signature.return;
+        if (ret && typeof ret !== "string") {
+            result += `${indent} * @return ${ret.description}\r\n`
+        }
+        result += `${indent} */\r\n`;
+        return result;
     }
     function writeLineBrokenProperty(indentRepeat: number, property: DescribedKeyTypePair) {
         let indent = repeatIndent(indentBase, indentRepeat);
