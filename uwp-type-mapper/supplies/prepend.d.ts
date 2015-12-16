@@ -172,6 +172,8 @@ declare namespace Windows.Foundation {
             getAt(index: number): T;
             indexOf(value: T): { index: number; returnValue: boolean; };
             getMany(startIndex: number): { items: T[]; returnValue: number; };
+            indexOf(value: T, ...extra: any[]): { index: number; returnValue: boolean; }; /* hack */
+            indexOf(searchElement: T, fromIndex?: number): number; /* hack */
         }
         interface IVector<T> extends Windows.Foundation.Collections.IIterable<T>, Array<T> {
             size: number;
@@ -186,6 +188,8 @@ declare namespace Windows.Foundation {
             clear(): void;
             getMany(startIndex: number): { items: T[]; returnValue: number; };
             replaceAll(items: T[]): void;
+            indexOf(value: T, ...extra: any[]): { index: number; returnValue: boolean; }; /* hack */
+            indexOf(searchElement: T, fromIndex?: number): number; /* hack */
         }
         interface IVectorChangedEventArgs {
             collectionChange: Windows.Foundation.Collections.CollectionChange;
@@ -232,19 +236,22 @@ declare namespace Windows.Media {
     namespace Playback {
         interface IMediaPlaybackSource { /* TODO */ }
     }
-    namespace Protection.PlayReady {
-        interface INDClosedCaptionDataReceivedEventArgs { /* TODO */ }
-        interface INDDownloadEngine { /* TODO */ }
-        interface INDLicenseFetchCompletedEventArgs { /* TODO */ }
-        interface INDLicenseFetchResult { /* TODO */ }
-        interface INDMessenger { /* TODO */ }
-        interface INDProximityDetectionCompletedEventArgs { /* TODO */ }
-        interface INDRegistrationCompletedEventArgs { /* TODO */ }
-        interface INDSendResult { /* TODO */ }
-        interface INDStartResult { /* TODO */ }
-        interface INDStreamParser { /* TODO */ }
+    namespace Protection {
         interface IMediaProtectionServiceRequest { /* TODO */ }
-        interface IPlayReadyServiceRequest { /* TODO */ }
+        namespace PlayReady {
+            interface INDClosedCaptionDataReceivedEventArgs { /* TODO */ }
+            interface INDDownloadEngine { /* TODO */ }
+            interface INDLicenseFetchCompletedEventArgs { /* TODO */ }
+            interface INDLicenseFetchResult { /* TODO */ }
+            interface INDMessenger { /* TODO */ }
+            interface INDProximityDetectionCompletedEventArgs { /* TODO */ }
+            interface INDRegistrationCompletedEventArgs { /* TODO */ }
+            interface INDSendResult { /* TODO */ }
+            interface INDStartResult { /* TODO */ }
+            interface INDStreamParser { /* TODO */ }
+            interface IMediaProtectionServiceRequest { /* TODO */ }
+            interface IPlayReadyServiceRequest { /* TODO */ }
+        }
     }
     namespace SpeechRecognition {
         interface ISpeechRecognitionConstraint { /* TODO */ }

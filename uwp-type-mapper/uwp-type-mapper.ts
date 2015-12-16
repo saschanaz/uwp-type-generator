@@ -10,7 +10,8 @@ import {
     DelegateTypeNotation,
     EventTypeNotation,
     NamespaceDocumentNotation,
-    StructureTypeNotation
+    StructureTypeNotation,
+    ClassTypeNotation
 } from "./uwp-type-parser";
 import {
     ClassDescription,
@@ -33,6 +34,7 @@ interface ExtendedClassDescription extends ClassDescription {
     __eventTarget?: boolean;
     __staticEventTarget?: boolean;
     __constructor: FunctionDescription;
+    __interfaces: string[];
 }
 
 interface FunctionDescription extends TypeDescription { __type: "function"; __signatures: ExtendedFunctionSignature[]; }
@@ -317,10 +319,16 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
                     mapItem(item);
                 }
                 else if (item.__type === "class") {
-                    if (doc && doc.type === "attribute") {
-                        item.__type = doc.type;
+                    if (doc) {
+                        if (doc.type === "attribute") {
+                            item.__type = doc.type;
+                        }
+                        else if (doc.type === "class") {
+                            (item as ExtendedClassDescription).__interfaces = (doc as ClassTypeNotation).interfaces;
+                        }
                     }
                     mapItem(item);
+
 
                     let ctorFullName = `${fullName}.constructor`;
                     let ctorDoc = docs[ctorFullName] as FunctionTypeNotation;
@@ -517,8 +525,17 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
         }
         result += `${initialIndent}${classPrefix}class ${className}`;
 
+        let typeForIVectorView: string;
+
         if (constructor.__extends && constructor.__extends !== "Object") {
             result += ` extends ${constructor.__extends}`
+            if (constructor.__extends === "Array") {
+                let vectorView = constructor.__interfaces && constructor.__interfaces.filter(name => name.startsWith("IVector"))[0];
+                if (vectorView) {
+                    typeForIVectorView = typeLinker(vectorView.match(/IVector(?:View)?<(.+)>/)[1].replace(/\^/g, ''));
+                    result += `<${typeForIVectorView}>`;
+                }
+            }
         }
         result += ' {\r\n';
 
@@ -553,6 +570,10 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
         if (constructor.__eventTarget) {
             result += `${nextLevelIndent}addEventListener(type: string, listener: Windows.Foundation.EventHandler<any>): void;\r\n`;
             result += `${nextLevelIndent}removeEventListener(type: string, listener: Windows.Foundation.EventHandler<any>): void;\r\n`;
+        }
+        if (typeForIVectorView) { // hacky way to resolve IVectorView confliction http://stackoverflow.com/questions/34087631
+            result += `${nextLevelIndent}indexOf(value: ${typeForIVectorView}, ...extra: any[]): { index: number; returnValue: boolean; } /* hack */\r\n`;
+            result += `${nextLevelIndent}indexOf(searchElement: ${typeForIVectorView}, fromIndex?: number): number; /* hack */\r\n`;
         }
 
         result += initialIndent + '}';

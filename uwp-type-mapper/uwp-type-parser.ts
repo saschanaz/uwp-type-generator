@@ -16,21 +16,26 @@ export interface CodeSnippet {
     language: string;
     content: string;
 }
+interface GenericType {
+    typeParameters: string[];
+}
 
+export interface ClassTypeNotation extends NamedTypeNotation {
+    type: "class";
+    interfaces: string[];
+}
 export interface FunctionTypeNotation extends NamedTypeNotation {
     description: ""; // describe in signature object
     type: "function";
     signatures: FunctionSignature[];
 }
 export interface DelegateTypeNotation extends NamedTypeNotation {
-    description: string;
     type: "delegate";
     signature: FunctionSignature;
 }
-export interface FunctionSignature {
+export interface FunctionSignature extends GenericType {
     description: string;
     parameters: DescribedKeyTypePair[];
-    typeParameters: string[];
     return: "instance" | TypeNotation;
     codeSnippet: string;
 }
@@ -149,12 +154,18 @@ async function parseAsMap() {
                     language: element.getAttribute("language"),
                     content: element.textContent
                 }));
-                
-                (referenceMap as Map<string, NamedTypeNotation>).set(lowerCaseId, {
+                let cppSnippet = codeSnippets.filter(codeSnippet => codeSnippet.language === "ManagedCPlusPlus")[0];
+                let interfaces: string[];
+                if (cppSnippet) {
+                    interfaces = extractInterfaces(inline(cppSnippet.content));
+                }
+
+                (referenceMap as Map<string, ClassTypeNotation>).set(lowerCaseId, {
                     description,
                     type: "class",
                     camelId,
-                    codeSnippets
+                    codeSnippets,
+                    interfaces
                 });
             }
             else if (title.endsWith(" attribute")) {
@@ -765,6 +776,33 @@ async function parseAsMap() {
             backtickMatch = typeName.match(backtickRegex);
         }
         return typeName;
+    }
+    function extractInterfaces(text: string) {
+        let interfaces: string[] = [];
+        let colonIndex = text.indexOf(":");
+        if (colonIndex === -1) {
+            return interfaces;
+        }
+        text = text.slice(colonIndex + 1);
+        
+        let genericSyntaxDepth = 0;
+        let lastCommaEnd = 0;
+        let index = 0;
+        for (let char of text) {
+            if (char === '<') {
+                genericSyntaxDepth++;
+            }
+            else if (char === '>') {
+                genericSyntaxDepth--;
+            }
+            else if (char === ',' && genericSyntaxDepth === 0) {
+                interfaces.push(text.slice(lastCommaEnd, index).trim());
+                lastCommaEnd = index + 1;
+            }
+            index++;
+        }
+        interfaces.push(text.slice(lastCommaEnd, index).trim());
+        return interfaces;
     }
 }
 
