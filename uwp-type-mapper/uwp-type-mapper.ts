@@ -109,7 +109,7 @@ async function main() {
             }
 
             let doc = docs[lowerCase];
-            if (doc && doc.type !== "interfacedummy") {
+            if (doc && doc.type !== "interface") {
                 references.push(match);
                 return match;
             }
@@ -180,7 +180,7 @@ async function main() {
                 doc.type !== "delegate" &&
                 doc.type !== "enumeration" &&
                 doc.type !== "structure" &&
-                doc.type !== "interfacedummy") {
+                doc.type !== "interface") {
 
                 continue;
             }

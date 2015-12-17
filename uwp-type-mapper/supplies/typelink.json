@@ -29,6 +29,5 @@
     "Windows.Devices.Bluetooth.RfcommServiceId": "Windows.Devices.Bluetooth.Rfcomm.RfcommServiceId",
     "Windows.Foundation.DateTime": "Date",
     "Windows.Foundation.IReference": "",
-    "Windows.Foundation.TimeSpan": "number",
-    "Windows.Storage.Streams.IRandomAccessStreamWithContentType": "Windows.Storage.Streams.RandomAccessStream"
+    "Windows.Foundation.TimeSpan": "number"
 }

@@ -20,6 +20,10 @@ interface GenericType {
     typeParameters: string[];
 }
 
+export interface InterfaceTypeNotation extends NamedTypeNotation {
+    type: "interface";
+    interfaces: string[];
+}
 export interface ClassTypeNotation extends NamedTypeNotation {
     type: "class";
     interfaces: string[];
@@ -128,18 +132,32 @@ async function parseAsMap() {
             let mainContent = mainSection.textContent
             let description = getFirstParagraphText(mainSection.firstElementChild, "H2");
             let title = doc.body.querySelector("div.title").textContent.trim();
-            
+
+            if (title.endsWith(" interface")) {
+                let result = dombox.packByHeader(mainSection);
+
+                let syntaxHeader = result.subheaders["Syntax"];
+                let codeSnippets = syntaxHeader.children.filter((element) => element.tagName === "CODESNIPPET").map<CodeSnippet>(element => ({
+                    language: element.getAttribute("language"),
+                    content: element.textContent
+                }));
+                let cppSnippet = codeSnippets.filter(codeSnippet => codeSnippet.language === "ManagedCPlusPlus")[0];
+                let interfaces: string[];
+                if (cppSnippet) {
+                    interfaces = extractInterfaces(inline(cppSnippet.content));
+                }
+
+                (referenceMap as Map<string, InterfaceTypeNotation>).set(lowerCaseId, {
+                    description,
+                    type: "interface",
+                    camelId,
+                    interfaces
+                });
+                continue;
+            }
+
             if (!categoryJs || camelId.startsWith("Windows.UI.Xaml") /* Do not parse XAML API */) {
-                if (title.endsWith(" interface")) {
-                    referenceMap.set(lowerCaseId, {
-                        description,
-                        type: "interfacedummy",
-                        camelId
-                    });
-                }
-                else {
-                    skippedById.push(camelId);
-                }
+                skippedById.push(camelId);
                 continue;
             }
 
@@ -203,8 +221,8 @@ async function parseAsMap() {
                             camelId
                         });
                     }
-                    else if (categoryJs) {
-                        debugger;
+                    else {
+                        throw new Error("Expected 2+ children on the first column but found less.");
                     }
                 }
 
@@ -275,7 +293,7 @@ async function parseAsMap() {
                 let typeNotationParagraph = before.nextElementSibling;
                 let type = exportJavaScriptTypeNotation(parseTypeNotationElement(typeNotationParagraph as HTMLParagraphElement));
                 if (!type) {
-                    // JS incompatble
+                    // JS incompatible
                     throw new Error("Expected a JavaScript-compatible type but not found");
                 }
 
