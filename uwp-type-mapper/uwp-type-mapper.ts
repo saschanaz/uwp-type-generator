@@ -11,7 +11,9 @@ import {
     EventTypeNotation,
     NamespaceDocumentNotation,
     StructureTypeNotation,
-    ClassTypeNotation
+    ClassTypeNotation,
+    PropertyTypeNotation,
+    LanguageTaggedContent
 } from "./uwp-type-parser";
 import {
     ClassDescription,
@@ -838,6 +840,18 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
             }
         }
         return functionDesc;
+    }
+
+    function exportJavaScriptTypeNotation(notation: string | LanguageTaggedContent[]) {
+        if (typeof notation === "string") {
+            return notation;
+        }
+        else {
+            let tagged = notation.filter(tagged => tagged.language === "JavaScript")[0];
+            if (tagged) {
+                return tagged.content;
+            }
+        }
     }
 }
 

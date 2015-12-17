@@ -6,19 +6,21 @@ import * as dombox from "./dombox"
 
 export interface TypeNotation {
     description: string;
-    type: string;
+    type: string | TypeName;
 }
 export interface NamedTypeNotation extends TypeNotation {
+    type: string;
     camelId: string;
-    codeSnippets?: CodeSnippet[];
+    codeSnippets?: LanguageTaggedContent[];
 }
-export interface CodeSnippet {
+export interface LanguageTaggedContent {
     language: string;
     content: string;
 }
 interface GenericType {
     typeParameters: string[];
 }
+type TypeName = string | LanguageTaggedContent[];
 
 export interface InterfaceTypeNotation extends NamedTypeNotation {
     type: "interface";
@@ -45,13 +47,17 @@ export interface FunctionSignature extends GenericType {
 }
 export interface DescribedKeyTypePair {
     description: string;
-    type: string;
     key: string;
+    type: TypeName;
 }
 
+export interface PropertyTypeNotation extends NamedTypeNotation {
+    type: "property";
+    name: TypeName;
+}
 export interface EventTypeNotation extends NamedTypeNotation {
     type: "event";
-    delegate: string;
+    delegate: TypeName;
 }
 export interface StructureTypeNotation extends NamedTypeNotation {
     type: "structure";
@@ -137,7 +143,7 @@ async function parseAsMap() {
                 let result = dombox.packByHeader(mainSection);
 
                 let syntaxHeader = result.subheaders["Syntax"];
-                let codeSnippets = syntaxHeader.children.filter((element) => element.tagName === "CODESNIPPET").map<CodeSnippet>(element => ({
+                let codeSnippets = syntaxHeader.children.filter((element) => element.tagName === "CODESNIPPET").map<LanguageTaggedContent>(element => ({
                     language: element.getAttribute("language"),
                     content: element.textContent
                 }));
@@ -168,7 +174,7 @@ async function parseAsMap() {
                 let result = dombox.packByHeader(mainSection);
 
                 let syntaxHeader = result.subheaders["Syntax"];
-                let codeSnippets = syntaxHeader.children.filter((element) => element.tagName === "CODESNIPPET").map<CodeSnippet>(element => ({
+                let codeSnippets = syntaxHeader.children.filter((element) => element.tagName === "CODESNIPPET").map<LanguageTaggedContent>(element => ({
                     language: element.getAttribute("language"),
                     content: element.textContent
                 }));
@@ -291,16 +297,13 @@ async function parseAsMap() {
                 
                 let before = Array.from(mainSection.querySelectorAll("h2")).filter((h2) => h2.textContent.trim().startsWith("Property value"))[0];
                 let typeNotationParagraph = before.nextElementSibling;
-                let type = exportJavaScriptTypeNotation(parseTypeNotationElement(typeNotationParagraph as HTMLParagraphElement));
-                if (!type) {
-                    // JS incompatible
-                    throw new Error("Expected a JavaScript-compatible type but not found");
-                }
+                let name = parseTypeNotationElement(typeNotationParagraph as HTMLParagraphElement);
 
-                referenceMap.set(lowerCaseId, {
+                (referenceMap as Map<string, PropertyTypeNotation>).set(lowerCaseId, {
                     description,
-                    type,
-                    camelId
+                    type: "property",
+                    camelId,
+                    name
                 });
             }
             else if (title.endsWith(" delegate")) {
@@ -321,8 +324,7 @@ async function parseAsMap() {
                 let parameterListElement = before.nextElementSibling as HTMLDListElement;
                 signature.parameters = parseParameterList(parameterListElement);
                 if (!signature.parameters) {
-                    // JS incompatible
-                    throw new Error("Expected a JavaScript-compatible type but not found");
+                    throw new Error("Expected a non-empty parameter list but not found");
                 }
 
                 (referenceMap as Map<string, DelegateTypeNotation>).set(lowerCaseId, {
@@ -341,7 +343,7 @@ async function parseAsMap() {
                 // multiple parameters:
                 // https://msdn.microsoft.com/en-us/library/windows/apps/dn631282.aspx
 
-                
+                // replace .#ctor(params) to .constructor
                 let ctorIndex = lowerCaseId.indexOf(".#ctor");
                 if (ctorIndex !== -1) {
                     lowerCaseId = `${lowerCaseId.slice(0, ctorIndex)}.constructor`;
@@ -363,8 +365,7 @@ async function parseAsMap() {
                 let parameterListElement = before.nextElementSibling as HTMLDListElement;
                 signature.parameters = parseParameterList(parameterListElement);
                 if (!signature.parameters) {
-                    // JS incompatible
-                    throw new Error("Expected a JavaScript-compatible type but not found");
+                    throw new Error("Expected a non-empty parameter list but not found");
                 }
 
                 let notation: FunctionTypeNotation = referenceMap.get(lowerCaseId) as FunctionTypeNotation || {
@@ -376,7 +377,6 @@ async function parseAsMap() {
                 notation.signatures.push(signature);
 
                 referenceMap.set(lowerCaseId, notation);
-                // Note: replace .#ctor(params) to .constructor
             }
             else if (title.endsWith(" method")) {
                 let signature = {
@@ -403,15 +403,10 @@ async function parseAsMap() {
                     if (returnValueHeader.children.length > 0) {
                         let typeNotationElement = returnValueHeader.children[0] as HTMLParagraphElement;
                         let typeDescriptionElement = returnValueHeader.children[1];
-
-                        let type = exportJavaScriptTypeNotation(parseTypeNotationElement(typeNotationElement));
-                        if (!type) {
-                            throw new Error("Expected a JavaScript-compatible type but not found");
-                        }
-
+                        
                         signature.return = {
                             description: inline(typeDescriptionElement.textContent),
-                            type
+                            type: parseTypeNotationElement(typeNotationElement)
                         };
                     }
                     else {
@@ -454,11 +449,7 @@ async function parseAsMap() {
                     throw new Error("Unexpected multiple table rows");
                 }
                 let typeNotationElement = rows[0].children[1];
-                let delegate = exportJavaScriptTypeNotation(parseTypeNotationElement(typeNotationElement as HTMLTableColElement, true))
-                if (!delegate) {
-                    // JS compatibility is already checked above
-                    throw new Error("Expected a JavaScript-compatible type but not found");
-                }
+                let delegate = parseTypeNotationElement(typeNotationElement as HTMLTableColElement, true)
 
                 if (!eventListener || !onevent) {
                     throw new Error("Expected both event listener/onevent syntax but not found");
@@ -509,7 +500,7 @@ async function parseAsMap() {
                 let rows = Array.from(table.rows).slice(1) as HTMLTableRowElement[];
                 for (let row of rows) {
                     let memberName = parseMemberName(row.children[0] as HTMLTableColElement);
-                    let memberType = exportJavaScriptTypeNotation(parseTypeNotationElement((row.children[1] as HTMLTableColElement).children[0] as HTMLParagraphElement, true));
+                    let memberType = parseTypeNotationElement((row.children[1] as HTMLTableColElement).children[0] as HTMLParagraphElement, true);
                     let memberDescription = getFirstParagraphText(row.children[2].firstElementChild);
                     notation.members.push({
                         description: memberDescription,
@@ -593,11 +584,7 @@ async function parseAsMap() {
                 parameterName = child.textContent.trim();
             }
             else if (child.tagName === "DD") {
-                let parameterType = exportJavaScriptTypeNotation(parseTypeNotationElement(child.children[0] as HTMLParagraphElement));
-                if (!parameterType) {
-                    // No JS type
-                    return;
-                }
+                let parameterType = parseTypeNotationElement(child.children[0] as HTMLParagraphElement);
 
                 let parameterDescription: string;
                 if (child.children[1]) {
@@ -618,7 +605,7 @@ async function parseAsMap() {
         return parameters;
     }
 
-    function parseTypeNotationElement(notationElement: HTMLElement, omitTypeIndication?: boolean): string | Map<string, string> {
+    function parseTypeNotationElement(notationElement: HTMLElement, omitTypeIndication?: boolean): string | LanguageTaggedContent[] {
         /*
         Expect "Type:"
         If sliced text still have non-whitespace text:
@@ -639,7 +626,8 @@ async function parseAsMap() {
                 Break, assuming there is no more type description
         */
         // TODO: Fix "array of " problem https://msdn.microsoft.com/en-us/library/windows/apps/windows.media.protection.playready.nddownloadenginenotifier.ondatareceived.aspx
-        let typeMap = new Map<string, string>();
+        let types: LanguageTaggedContent[] = [];
+        
 
         let node = notationElement.firstChild;
         
@@ -663,7 +651,7 @@ async function parseAsMap() {
                     }
                     if (parsed.languages) {
                         for (let language of parsed.languages) {
-                            typeMap.set(language, parsed.type);
+                            types.push({ language, content: parsed.type });
                         }
                     }
                     else {
@@ -720,18 +708,18 @@ async function parseAsMap() {
                     }
                     if (parsed.languages) {
                         for (let language of parsed.languages) {
-                            typeMap.set(language, proposedTypeName);
+                            types.push({ language, content: proposedTypeName });
                         }
                     }
                 }
             }
             node = node.nextSibling;
         }
-        if (typeMap.size === 0) {
+        if (types.length === 0) {
             return proposedTypeName;
         }
         else {
-            return typeMap;
+            return types;
         }
 
         interface TypeForLanguage {
@@ -772,15 +760,6 @@ async function parseAsMap() {
             throw new Error("Unexpected name numbers");
         }
         return names.map((strong) => strong.textContent.trim());
-    }
-
-    function exportJavaScriptTypeNotation(notation: string | Map<string, string>) {
-        if (typeof notation === "string") {
-            return notation;
-        }
-        else {
-            return notation.get("JavaScript");
-        }
     }
 
     function inline(text: string) {
