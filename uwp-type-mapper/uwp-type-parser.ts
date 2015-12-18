@@ -25,6 +25,10 @@ type TypeName = string | LanguageTaggedContent[];
 export interface InterfaceTypeNotation extends NamedTypeNotation {
     type: "interface";
     interfaces: string[];
+    members: {
+        methods: string[];
+        properties: string[];
+    }
 }
 export interface ClassTypeNotation extends NamedTypeNotation {
     type: "class";
@@ -138,8 +142,32 @@ async function parseAsMap() {
             let mainContent = mainSection.textContent
             let description = getFirstParagraphText(mainSection.firstElementChild, "H2");
             let title = doc.body.querySelector("div.title").textContent.trim();
+            
+            if (camelId.startsWith("Windows.UI.Xaml") /* Do not parse XAML API */) {
+                skippedById.push(camelId);
+                continue;
+            }
+            if (!categoryJs &&
+                !title.endsWith(" interface") &&
+                !title.endsWith(" property") &&
+                !title.endsWith(" method")) {
+
+                skippedById.push(camelId);
+                continue;
+            }
+
 
             if (title.endsWith(" interface")) {
+                let notation = {
+                    description,
+                    type: "interface",
+                    camelId,
+                    members: {
+                        methods: [],
+                        properties: []
+                    }
+                } as InterfaceTypeNotation;
+
                 let result = dombox.packByHeader(mainSection);
 
                 let syntaxHeader = result.subheaders["Syntax"];
@@ -148,26 +176,39 @@ async function parseAsMap() {
                     content: element.textContent
                 }));
                 let cppSnippet = codeSnippets.filter(codeSnippet => codeSnippet.language === "ManagedCPlusPlus")[0];
-                let interfaces: string[];
                 if (cppSnippet) {
-                    interfaces = extractInterfaces(inline(cppSnippet.content));
+                    notation.interfaces = extractInterfaces(inline(cppSnippet.content));
                 }
 
-                (referenceMap as Map<string, InterfaceTypeNotation>).set(lowerCaseId, {
-                    description,
-                    type: "interface",
-                    camelId,
-                    interfaces
-                });
-                continue;
-            }
+                let membersHeader = result.subheaders["Members"];
+                {
+                    let methodsHeader = membersHeader.subheaders["Methods"];
+                    if (methodsHeader) {
+                        let table = methodsHeader.children[1] as HTMLTableElement;
+                        if (table.tagName !== "TABLE") {
+                            throw new Error(`Expected TABLE element but found ${table.tagName}`);
+                        }
+                        for (let item of scanMemberTableItems(table)) {
+                            notation.members.methods.push(removeParentheses(item.linkName));
+                        }
+                    }
+                }
+                {
+                    let propertiesHeader = membersHeader.subheaders["Properties"];
+                    if (propertiesHeader) {
+                        let table = propertiesHeader.children[1] as HTMLTableElement;
+                        if (table.tagName !== "TABLE") {
+                            throw new Error(`Expected TABLE element but found ${table.tagName}`);
+                        }
+                        for (let item of scanMemberTableItems(table)) {
+                            notation.members.properties.push(item.linkName);
+                        }
+                    }
+                }
 
-            if (!categoryJs || camelId.startsWith("Windows.UI.Xaml") /* Do not parse XAML API */) {
-                skippedById.push(camelId);
-                continue;
+                referenceMap.set(lowerCaseId, notation);
             }
-
-            if (title.endsWith(" class")) {
+            else if (title.endsWith(" class")) {
                 // https://msdn.microsoft.com/en-us/library/windows/apps/windows.applicationmodel.background.smartcardtrigger.aspx
                 // https://msdn.microsoft.com/en-us/library/windows/apps/windows.devices.enumeration.pnp.pnpobjectcollection.aspx
 
@@ -221,10 +262,12 @@ async function parseAsMap() {
                     let nameCol = row.children[0] as HTMLTableColElement;
                     let descCol = row.children[2] as HTMLTableColElement;
                     if (nameCol.children.length > 1) {
-                        referenceMap.set(`${lowerCaseId}.${nameCol.children[1].textContent.trim().toLowerCase()}`, {
+                        let memberName = nameCol.children[1].textContent.trim();
+                        (referenceMap as Map<string, PropertyTypeNotation>).set(`${lowerCaseId}.${memberName.toLowerCase()}`, {
                             description: getFirstParagraphText(descCol.firstElementChild),
-                            type: "Number",
-                            camelId
+                            type: "property",
+                            camelId: `${camelId}.${memberName}`,
+                            name: "Number"
                         });
                     }
                     else {
@@ -349,7 +392,6 @@ async function parseAsMap() {
                     lowerCaseId = `${lowerCaseId.slice(0, ctorIndex)}.constructor`;
                 }
                 else {
-                    debugger;
                     throw new Error("Expected .ctor but not found");
                 }
 
@@ -387,10 +429,8 @@ async function parseAsMap() {
                 let syntaxHeader = result.subheaders["Syntax"];
                 signature.codeSnippet = syntaxHeader.children.filter((element) => element.tagName === "CODESNIPPET" && element.getAttribute("language") === "JavaScript")[0].textContent;
 
-                let parentheses = parenthesisRegex.exec(lowerCaseId);
-                if (parentheses) {
-                    lowerCaseId = lowerCaseId.slice(0, parentheses.index);
-                } // may exist when with params, may not when without
+                // may exist when with params, may not when without
+                lowerCaseId = removeParentheses(lowerCaseId);
                 
                 let parameterListElement = result.subheaders["Parameters"].children[0] as HTMLDListElement;
                 signature.parameters = parseParameterList(parameterListElement);
@@ -528,6 +568,14 @@ async function parseAsMap() {
 
     return referenceMap;
 
+
+    function removeParentheses(text: string) {
+        let parentheses = parenthesisRegex.exec(text);
+        if (parentheses) {
+            text = text.slice(0, parentheses.index);
+        }
+        return text;
+    }
 
     function* scanMemberTableItems(table: HTMLTableElement) {
         let cellRows = dombox.packByCellMatrix(table as HTMLTableElement);
