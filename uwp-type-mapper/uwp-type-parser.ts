@@ -47,7 +47,7 @@ export interface FunctionSignature extends GenericType {
     description: string;
     parameters: DescribedKeyTypePair[];
     return: "instance" | TypeNotation;
-    codeSnippet: string;
+    codeSnippets: LanguageTaggedContent[];
 }
 export interface DescribedKeyTypePair {
     description: string;
@@ -399,7 +399,7 @@ async function parseAsMap() {
                     description,
                     parameters: undefined,
                     return: "instance",
-                    codeSnippet: undefined,
+                    codeSnippets: undefined,
                     typeParameters: undefined
                 } as FunctionSignature;
 
@@ -427,7 +427,10 @@ async function parseAsMap() {
 
                 let result = dombox.packByHeader(mainSection);
                 let syntaxHeader = result.subheaders["Syntax"];
-                signature.codeSnippet = syntaxHeader.children.filter((element) => element.tagName === "CODESNIPPET" && element.getAttribute("language") === "JavaScript")[0].textContent;
+                signature.codeSnippets = syntaxHeader.children.filter((element) => element.tagName === "CODESNIPPET").map<LanguageTaggedContent>(element => ({
+                    language: element.getAttribute("language"),
+                    content: element.textContent
+                }));
 
                 // may exist when with params, may not when without
                 lowerCaseId = removeParentheses(lowerCaseId);
