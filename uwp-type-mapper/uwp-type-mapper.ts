@@ -378,7 +378,7 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
                 __fullname: typeReference,
                 __description: doc.description,
                 __type: "interfaceliteral",
-                __members: (doc as StructureTypeNotation).members
+                __members: rememberReferencesFromKeyTypePairs((doc as StructureTypeNotation).members)
             } as InterfaceLiteralDescription;
         }
         else if (doc.type === "delegate") {
@@ -386,7 +386,7 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
                 __fullname: typeReference,
                 __description: doc.description,
                 __type: "delegate",
-                __signature: (doc as DelegateTypeNotation).signature
+                __signature: rememberReferenceInSignature((doc as DelegateTypeNotation).signature)
             } as DelegateDescription;
         }
         else if (doc.type === "interface") {
@@ -395,7 +395,7 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
                 rememberType(interf);
             }
             /* TODO: remember type from interface members */
-            let members = (doc as InterfaceTypeNotation).members
+            let members = (doc as InterfaceTypeNotation).members;
             for (let method of members.methods) {
                 let doc = docs[method.toLowerCase()] as FunctionTypeNotation;
                 if (!doc) {
@@ -441,14 +441,26 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
 
     function rememberReferenceInSignatures(signatures: FunctionSignature[]) {
         for (let signature of signatures) {
-            for (let parameter of signature.parameters) {
-                rememberType(extractJSOrCppType(parameter.type));
-            }
-            if (signature.return && typeof signature.return !== "string") {
-                rememberType(extractJSOrCppType((signature.return as TypeNotation).type));
-            }
+            rememberReferenceInSignature(signature);
         }
         return signatures;
+    }
+
+    function rememberReferenceInSignature(signature: FunctionSignature) {
+        for (let parameter of signature.parameters) {
+            rememberType(extractJSOrCppType(parameter.type));
+        }
+        if (signature.return && typeof signature.return !== "string") {
+            rememberType(extractJSOrCppType((signature.return as TypeNotation).type));
+        }
+        return signature;
+    }
+    
+    function rememberReferencesFromKeyTypePairs(pairs: DescribedKeyTypePair[]) {
+        for (let pair of pairs) {
+            rememberType(extractJSOrCppType(pair.type));
+        }
+        return pairs;
     }
 
     function rememberType(typeReference: string) {
@@ -546,6 +558,16 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
                 result += `<${signature.typeParameters.join(', ')}>`
             }
             result += ` = (${writeParameters(signature)}) => void;\r\n`;
+            return result;
+        }
+        else if (iteration.__type === "interface") {
+            let result = `${initialIndent}/** ${iteration.__description} */\r\n`;
+            result += `${initialIndent}interface ${iterationName}`;
+            if ((iteration as InterfaceDescription).__typeParameters) {
+                result += `<${(iteration as InterfaceDescription).__typeParameters.join(', ')}>`
+            }
+            // TODO: add generic syntax
+            result += ` {}\r\n`;
             return result;
         }
     }

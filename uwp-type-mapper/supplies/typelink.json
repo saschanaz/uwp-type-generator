@@ -9,7 +9,6 @@
     "Int16": "number",
     "Int32": "number",
     "Int64": "number",
-    "KeyEventArgs": "any /* unmapped: KeyEventArgs */",
     "Number": "number",
     "Object": "any",
     "Platform::Boolean": "boolean",
@@ -34,10 +33,12 @@
     "Windows.Foundation.DateTime": "Date",
     "Windows.Foundation.IReference": "",
     "Windows.Foundation.TimeSpan": "number",
+    "Windows.UI.Core.KeyEventArgs": "any /* unmapped: KeyEventArgs */",
     "Windows::Foundation::DateTime": "Date",
     "Windows::Foundation::HResult": "WinRTError",
     "Windows::Foundation::TimeSpan": "number",
     "Windows::Foundation::Uri": "Windows.Foundation.Uri",
     "int32": "number",
+    "int64": "number",
     "uint64": "number"
 }
