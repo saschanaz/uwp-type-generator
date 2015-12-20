@@ -22,7 +22,7 @@ interface GenericType {
 }
 type TypeName = string | LanguageTaggedContent[];
 
-export interface InterfaceTypeNotation extends NamedTypeNotation {
+export interface InterfaceTypeNotation extends NamedTypeNotation, GenericType {
     type: "interface";
     interfaces: string[];
     members: {
@@ -72,6 +72,7 @@ export interface NamespaceDocumentNotation extends NamedTypeNotation {
     members: {
         structures: string[];
         delegates: string[];
+        interfaces: string[];
     }
 }
 
@@ -169,6 +170,11 @@ async function parseAsMap() {
                         properties: []
                     }
                 } as InterfaceTypeNotation;
+
+                let typeParameterMatch = title.slice(0, -10).match(genericsRegex);
+                if (typeParameterMatch) { // generics
+                    notation.typeParameters = typeParameterMatch[1].split(', ');
+                }
 
                 let result = dombox.packByHeader(mainSection);
 
@@ -286,7 +292,8 @@ async function parseAsMap() {
                     type: "namespace",
                     members: {
                         structures: [],
-                        delegates: []
+                        delegates: [],
+                        interfaces: []
                     },
                     camelId
                 };
@@ -312,6 +319,15 @@ async function parseAsMap() {
                             notation.members.delegates.push(item.linkName);
                         }
                     }
+                    if (members.subheaders["Interfaces"]) {
+                        let table = members.subheaders["Interfaces"].children[1] as HTMLTableElement;
+                        if (table.tagName !== "TABLE") {
+                            throw new Error(`Expected TABLE element but found ${table.tagName}`);
+                        }
+                        for (let item of scanMemberTableItems(table)) {
+                            notation.members.interfaces.push(item.linkName);
+                        }
+                    }
                 }
                 else {
                     let table: HTMLTableElement;
@@ -333,6 +349,9 @@ async function parseAsMap() {
                         }
                         else if (item.textContent.endsWith(" delegate")) {
                             notation.members.delegates.push(item.linkName);
+                        }
+                        else if (item.textContent.endsWith(" interface")) {
+                            notation.members.interfaces.push(item.linkName);
                         }
                     }
                 }

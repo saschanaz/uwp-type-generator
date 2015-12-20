@@ -13,6 +13,7 @@ import {
     StructureTypeNotation,
     ClassTypeNotation,
     PropertyTypeNotation,
+    InterfaceTypeNotation,
     LanguageTaggedContent
 } from "./uwp-type-parser";
 import {
@@ -42,6 +43,7 @@ interface ExtendedClassDescription extends ClassDescription {
 interface FunctionDescription extends TypeDescription { __type: "function"; __signatures: ExtendedFunctionSignature[]; }
 interface EventDescription extends TypeDescription { __type: "event"; __delegate: string; }
 interface DelegateDescription extends TypeDescription { __type: "delegate"; __signature: FunctionSignature; }
+interface InterfaceDescription extends TypeDescription { __type: "interface"; __interfaces: string[]; __typeParameters: string[]; }
 interface InterfaceLiteralDescription extends TypeDescription { __type: "interfaceliteral"; __members: DescribedKeyTypePair[]; }
 
 async function main() {
@@ -232,8 +234,8 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
     let nonValueTypeParentNamespaceMap = new Map<string, TypeDescription>();
     let typeReferenceSet = new Set<string>();
     typeReferenceSet.add("Windows.Foundation.EventHandler"); // documents reference this incorrectly
-    typeReferenceSet.add("Windows.Foundation.AsyncActionProgressHandler"); // only referenced from interfaces
-    typeReferenceSet.add("Windows.Foundation.AsyncActionWithProgressCompletedHandler"); // only referenced from interfaces
+    //typeReferenceSet.add("Windows.Foundation.AsyncActionProgressHandler"); // only referenced from interfaces
+    //typeReferenceSet.add("Windows.Foundation.AsyncActionWithProgressCompletedHandler"); // only referenced from interfaces
     mapItem(parentIteration);
 
     function mapItem(iteration: TypeDescription) {
@@ -312,6 +314,10 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
                             for (let delegate of (doc as NamespaceDocumentNotation).members.delegates) {
                                 nonValueTypeParentNamespaceMap.set(delegate, item);
                             }
+                            for (let interf of (doc as NamespaceDocumentNotation).members.interfaces) {
+                                nonValueTypeParentNamespaceMap.set(interf, item);
+                            }
+                            // TODO: interface (parser should get them)
                         }
                     }
                     mapItem(item);
@@ -368,12 +374,7 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
             continue;
         }
         if (doc.type === "structure") {
-            let split = typeReference.split('.');
-            let shortName = split[split.length - 1];
-            if (!shortName) {
-                throw new Error(`Unexpected structure name: ${typeReference}`);
-            }
-            parentNamespace[shortName] = {
+            parentNamespace[getShortName(typeReference)] = {
                 __fullname: typeReference,
                 __description: doc.description,
                 __type: "interfaceliteral",
@@ -381,17 +382,47 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
             } as InterfaceLiteralDescription;
         }
         else if (doc.type === "delegate") {
-            let split = typeReference.split('.');
-            let shortName = split[split.length - 1];
-            if (!shortName) {
-                throw new Error(`Unexpected structure name: ${typeReference}`);
-            }
-            parentNamespace[shortName] = {
+            parentNamespace[getShortName(typeReference)] = {
                 __fullname: typeReference,
                 __description: doc.description,
                 __type: "delegate",
                 __signature: (doc as DelegateTypeNotation).signature
             } as DelegateDescription;
+        }
+        else if (doc.type === "interface") {
+            let interfaces = (doc as InterfaceTypeNotation).interfaces;
+            for (let interf of interfaces) {
+                rememberType(interf);
+            }
+            /* TODO: remember type from interface members */
+            let members = (doc as InterfaceTypeNotation).members
+            for (let method of members.methods) {
+                let doc = docs[method.toLowerCase()] as FunctionTypeNotation;
+                if (!doc) {
+                    continue;
+                }
+                if (doc.type !== "function") {
+                    throw new Error(`Expected function type documentation but found ${doc.type}`);
+                }
+                rememberReferenceInSignatures(doc.signatures);
+            }
+            for (let property of members.properties) {
+                let doc = docs[property.toLowerCase()] as PropertyTypeNotation;
+                if (!doc) {
+                    continue;
+                }
+                if (doc.type !== "property") {
+                    throw new Error(`Expected property type documentation but found ${doc.type}`);
+                }
+                rememberType(extractJSOrCppType(doc.name));
+            }
+            parentNamespace[getShortName(typeReference)] = {
+                __fullname: typeReference,
+                __description: doc.description,
+                __type: "interface",
+                __interfaces: interfaces,
+                __typeParameters: (doc as InterfaceTypeNotation).typeParameters
+            } as InterfaceDescription;
         }
     }
 
@@ -425,6 +456,15 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
         for (let match of matches) {
             typeReferenceSet.add(match);
         }
+    }
+
+    function getShortName(longName: string) {
+        let split = longName.split('.');
+        let shortName = split[split.length - 1];
+        if (!shortName) {
+            throw new Error(`Expected dot notation but not found: ${longName}`);
+        }
+        return shortName;
     }
 }
 
