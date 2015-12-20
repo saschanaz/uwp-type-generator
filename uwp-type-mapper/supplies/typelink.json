@@ -12,6 +12,10 @@
     "KeyEventArgs": "any /* unmapped: KeyEventArgs */",
     "Number": "number",
     "Object": "any",
+    "Platform::Boolean": "boolean",
+    "Platform::Guid": "string",
+    "Platform::Object": "any",
+    "Platform::String": "string",
     "Single": "number",
     "String": "string",
     "System.Boolean": "boolean",
@@ -29,5 +33,11 @@
     "Windows.Devices.Bluetooth.RfcommServiceId": "Windows.Devices.Bluetooth.Rfcomm.RfcommServiceId",
     "Windows.Foundation.DateTime": "Date",
     "Windows.Foundation.IReference": "",
-    "Windows.Foundation.TimeSpan": "number"
+    "Windows.Foundation.TimeSpan": "number",
+    "Windows::Foundation::DateTime": "Date",
+    "Windows::Foundation::HResult": "WinRTError",
+    "Windows::Foundation::TimeSpan": "number",
+    "Windows::Foundation::Uri": "Windows.Foundation.Uri",
+    "int32": "number",
+    "uint64": "number"
 }

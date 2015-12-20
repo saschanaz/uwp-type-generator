@@ -150,7 +150,9 @@ async function parseAsMap() {
             if (!categoryJs &&
                 !title.endsWith(" interface") &&
                 !title.endsWith(" property") &&
-                !title.endsWith(" method")) {
+                !title.endsWith(" method") &&
+                !title.endsWith(" enumeration") &&
+                !title.endsWith(" class")) {
 
                 skippedById.push(camelId);
                 continue;
@@ -261,18 +263,20 @@ async function parseAsMap() {
                 for (let row of rows) {
                     let nameCol = row.children[0] as HTMLTableColElement;
                     let descCol = row.children[2] as HTMLTableColElement;
+                    let memberName: string;
                     if (nameCol.children.length > 1) {
-                        let memberName = nameCol.children[1].textContent.trim();
-                        (referenceMap as Map<string, PropertyTypeNotation>).set(`${lowerCaseId}.${memberName.toLowerCase()}`, {
-                            description: getFirstParagraphText(descCol.firstElementChild),
-                            type: "property",
-                            camelId: `${camelId}.${memberName}`,
-                            name: "Number"
-                        });
+                        memberName = nameCol.children[1].textContent.trim();
                     }
                     else {
-                        throw new Error("Expected 2+ children on the first column but found less.");
+                        memberName = nameCol.textContent.trim();
                     }
+
+                    (referenceMap as Map<string, PropertyTypeNotation>).set(`${lowerCaseId}.${memberName.toLowerCase()}`, {
+                        description: getFirstParagraphText(descCol.firstElementChild),
+                        type: "property",
+                        camelId: `${camelId}.${memberName}`,
+                        name: "Number"
+                    });
                 }
 
             }

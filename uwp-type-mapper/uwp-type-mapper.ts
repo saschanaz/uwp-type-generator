@@ -91,7 +91,7 @@ async function main() {
     process.exit();
 
     function tryLinkType(typeName: string) {
-        let typeNameRegex = /[\w\.]+/g;
+        let typeNameRegex = /[\w\.\:]+/g;
         let remainingTypeParameterSyntaxRegex = /^<(.+)>$/;
         let interfaceMarkerRegex = /\.I([A-Z]\w+)/;
         // let requiredTypeParameterNotExistRegex = /IVectorView(?:,|>|$)/
@@ -145,8 +145,7 @@ async function main() {
                 }
                 typeParameterLength = typeParameters.length;
             }
-            else
-            {
+            else {
                 typeParameterLength = typeParameterLengthMap[reference];
                 if (!typeParameterLength) {
                     continue;
@@ -247,20 +246,12 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
             if (typeof item === "string") {
                 let fullName = `${iteration.__fullname}.${itemName}`.toLowerCase();
 
-                let doc = docs[fullName] as TypeNotation;
+                let doc = docs[fullName] as NamedTypeNotation;
                 if (!doc) {
                     continue;
                 }
 
                 switch (doc.type) {
-                    case "class":
-                        break;
-                    case "enumeration":
-                        break;
-                    case "namespace":
-                        break;
-                    case "delegate":
-                        break;
                     case "function":
                         /*
                         TODO: interfaces from parser and iterator are too different, should be integrated
@@ -276,29 +267,34 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
                         /*
                         TODO: methods and onevents must be distingushable (by __type?)
                         Do FunctionDescription have to allow "function"|"?" <- What name? callback?
-                         */
-                        rememberType((doc as EventTypeNotation).delegate);
+                        */
+                        let delegateType = extractJSOrCppType((doc as EventTypeNotation).delegate);
+                        rememberType(delegateType);
                         iteration[itemName] = {
                             __fullname: fullName,
                             __type: "event",
                             __description: doc.description,
-                            __delegate: (doc as EventTypeNotation).delegate
+                            __delegate: extractJSOrCppType(delegateType)
                         } as EventDescription;
                         break;
-                    default: {
-                        rememberType(doc.type);
+                    case "property": {
+                        let propertyType = extractJSOrCppType((doc as PropertyTypeNotation).name);
+                        rememberType(propertyType);
                         iteration[itemName] = {
                             __fullname: fullName,
-                            __type: doc.type,
+                            __type: propertyType,
                             __description: doc.description
                         } as TypeDescription;
                         break;
+                    }
+                    default: {
+                        throw new Error(`Unexpected document type: ${doc.type}`);
                     }
                 }
             }
             else {
                 let fullName = item.__fullname.toLowerCase();
-                let doc = docs[fullName] as TypeNotation;
+                let doc = docs[fullName] as NamedTypeNotation;
                 if (doc) {
                     item.__description = doc.description;
                 }
@@ -415,10 +411,10 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
     function rememberReferenceInSignatures(signatures: FunctionSignature[]) {
         for (let signature of signatures) {
             for (let parameter of signature.parameters) {
-                rememberType(parameter.type);
+                rememberType(extractJSOrCppType(parameter.type));
             }
             if (signature.return && typeof signature.return !== "string") {
-                rememberType((signature.return as TypeNotation).type);
+                rememberType(extractJSOrCppType((signature.return as TypeNotation).type));
             }
         }
         return signatures;
@@ -648,7 +644,7 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
             else if (key === "function") {
                 key = "func"; // keyword
             }
-            parameterArray.push(`${key}: ${normalizeTypeName(parameter.type)}`);
+            parameterArray.push(`${key}: ${normalizeTypeName(extractJSOrCppType(parameter.type))}`);
         }
         return parameterArray.join(', ');
     }
@@ -667,7 +663,7 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
                 return `{ ${members.map((member) => writeInlineProperty(member)).join(" ")} }`;
             }
             else {
-                return normalizeTypeName(signatureReturn.type);
+                return normalizeTypeName(extractJSOrCppType(signatureReturn.type));
             }
         }
     }
@@ -691,14 +687,14 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
     }
     function writeLineBrokenProperty(indentRepeat: number, property: DescribedKeyTypePair) {
         let indent = repeatIndent(indentBase, indentRepeat);
-        let result = `${indent}${property.key}: ${normalizeTypeName(property.type)};\r\n`;
+        let result = `${indent}${property.key}: ${normalizeTypeName(extractJSOrCppType(property.type))};\r\n`;
         if (property.description) {
             result = `${indent}/** ${property.description} */\r\n${result}`;
         }
         return result;
     }
     function writeInlineProperty(property: DescribedKeyTypePair) {
-        let result = `${property.key}: ${normalizeTypeName(property.type)};`;
+        let result = `${property.key}: ${normalizeTypeName(extractJSOrCppType(property.type))};`;
         if (property.description) {
             result = `/** ${property.description} */ ${result}`;
         }
@@ -734,25 +730,18 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
             parameters: []
         } as FunctionSignature;
         let outParameters: DescribedKeyTypePair[] = [];
-        let codeSnippetArgs = extractCallArguments(signature.codeSnippet, name);
 
         for (let i = 0; i < signature.parameters.length; i++) {
             let parameter = signature.parameters[i];
-            let arg = codeSnippetArgs[i];
 
             let markedAsOut = false;
             if (parameter.key.endsWith(" (out parameter)")) {
                 markedAsOut = true;
                 parameter.key = parameter.key.slice(0, -16).trim();
             }
-
-            if (parameter.key !== arg) {
-                if (markedAsOut) {
-                    outParameters.push(parameter);
-                }
-                else {
-                    throw new Error("Unexpected parameter mismatch");
-                }
+            
+            if (markedAsOut) {
+                outParameters.push(parameter);
             }
             else {
                 newSignature.parameters.push(parameter);
@@ -787,16 +776,7 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
             return newSignature;
         }
     }
-    function extractCallArguments(codeSnippet: string, functionName: string) {
-        let callSyntaxRegex = new RegExp(`${functionName}\\(([^\\)]*)\\)`);
-        let callSyntax = codeSnippet.match(callSyntaxRegex);
-        if (callSyntax) {
-            return callSyntax[1].split(', ');
-        }
-        else {
-            throw new Error("Cannot find function call inside code snippet");
-        }
-    }
+    
     function normalizeDelegateSignature(delegateDesc: DelegateDescription) {
         if (!delegateDesc.__fullname.endsWith("EventHandler")) {
             // Change below is only requried for event handlers
@@ -806,17 +786,19 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
         if (!signature.parameters.length) {
             signature.parameters[0] = {
                 key: "ev",
-                type: "WinRTEvent<void>"
+                type: "WinRTEvent<void>",
+                description: ""
             } as DescribedKeyTypePair;
         }
         else {
             let sender = signature.parameters[0];
             let eventArg = signature.parameters[1];
-            let prefix = eventArg ? `${eventArg.type} & ` : "";
+            let prefix = eventArg ? `${extractJSOrCppType(eventArg.type)} & ` : "";
             signature.parameters = [];
             signature.parameters[0] = {
                 key: "ev",
-                type: `${prefix}WinRTEvent<${sender.type}>`
+                type: `${prefix}WinRTEvent<${extractJSOrCppType(sender.type)}>`,
+                description: ""
             } as DescribedKeyTypePair;
         }
         return delegateDesc;
@@ -827,31 +809,43 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
             return functionDesc;
         }
         for (let signature of functionDesc.__signatures) {
-            let returnType = signature.return;
-            if (typeof returnType === "string") {
+            let returnNotation = signature.return;
+            if (typeof returnNotation === "string") {
                 throw new Error("Unexpected string return type");
             }
-            else if (returnType.type.endsWith("Operation")) {
-                returnType.type = `Windows.Foundation.IPromiseWithOperation<any /* unmapped */,${returnType.type}>`;
-            }
-            else if (returnType.type.startsWith("Windows.Foundation.IAsync")) {
-                // alias type IPromiseWithIAsyncOperation<TResult> = IPromiseWithOperation<TResult, IAsyncOperation<TResult>>, etc
-                returnType.type = returnType.type.replace(/^Windows.Foundation.(IAsync\w+)/, "Windows.Foundation.IPromiseWith$1");
+            else {
+                let returnType = extractJSOrCppType(returnNotation.type);
+                if (returnType.endsWith("Operation")) {
+                    returnNotation.type = `Windows.Foundation.IPromiseWithOperation<any /* unmapped */,${returnNotation.type}>`;
+                }
+                else if (returnType.startsWith("Windows.Foundation.IAsync")) {
+                    // alias type IPromiseWithIAsyncOperation<TResult> = IPromiseWithOperation<TResult, IAsyncOperation<TResult>>, etc
+                    returnNotation.type = returnType.replace(/^Windows.Foundation.(IAsync\w+)/, "Windows.Foundation.IPromiseWith$1");
+                }
             }
         }
         return functionDesc;
     }
+}
 
-    function exportJavaScriptTypeNotation(notation: string | LanguageTaggedContent[]) {
-        if (typeof notation === "string") {
-            return notation;
+// Note that tag language names is different on code snippets
+// tag on type: JavaScript/C++
+// tag on snippets: JavaScript/ManagedCPlusPlus
+// Should the names be normalized by parser?
+function extractJSOrCppType(type: string | LanguageTaggedContent[]) {
+    if (typeof type === "string") {
+        return type;
+    }
+    else {
+        let jsType = type.filter(tagged => tagged.language === "JavaScript")[0];
+        if (jsType) {
+            return jsType.content;
         }
-        else {
-            let tagged = notation.filter(tagged => tagged.language === "JavaScript")[0];
-            if (tagged) {
-                return tagged.content;
-            }
+        let cppType = type.filter(tagged => tagged.language === "C++")[0];
+        if (cppType) {
+            return cppType.content;
         }
+        throw new Error("Expected JavaScript or C++ tag but not found");
     }
 }
 
