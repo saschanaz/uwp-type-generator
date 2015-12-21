@@ -11,6 +11,7 @@
     "Int64": "number",
     "Number": "number",
     "Object": "any",
+    "Platform::Array": "Array",
     "Platform::Boolean": "boolean",
     "Platform::Guid": "string",
     "Platform::Object": "any",
@@ -38,7 +39,12 @@
     "Windows::Foundation::HResult": "WinRTError",
     "Windows::Foundation::TimeSpan": "number",
     "Windows::Foundation::Uri": "Windows.Foundation.Uri",
+    "float32": "number",
+    "float64": "number",
     "int32": "number",
     "int64": "number",
-    "uint64": "number"
+    "uint16": "number",
+    "uint32": "number",
+    "uint64": "number",
+    "uint8": "number"
 }

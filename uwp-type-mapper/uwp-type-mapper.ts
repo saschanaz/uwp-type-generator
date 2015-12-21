@@ -78,7 +78,7 @@ async function main() {
     let iterations = JSON.parse(await fspromise.readFile(args["-i"]));
 
     console.log("Mapping...");
-    map(iterations, docs, nameMap);
+    map(iterations, docs, nameMap, (typeName) => typelink[typeName]);
 
     if (args["-mapout"]) {
         // for debugging purpose
@@ -217,7 +217,7 @@ async function main() {
     }
 }
 
-function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, string>) {
+function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, string>, getExplicitLink: (typeName: string) => string) {
     /*
     interface mapping?
 
@@ -229,7 +229,7 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
     for referenced typename: if map.has(typeName) then namespace[typeName] = interfaceLiteralDescription;
     */
     let genericsRegex = /<(.+)>$/;
-    let typeNameRegex = /[\w\.]+/g;
+    let typeNameRegex = /[\w\.\:]+/g;
 
     let nonValueTypeParentNamespaceMap = new Map<string, TypeDescription>();
     let typeReferenceSet = new Set<string>();
@@ -253,46 +253,7 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
                     continue;
                 }
 
-                switch (doc.type) {
-                    case "function":
-                        /*
-                        TODO: interfaces from parser and iterator are too different, should be integrated
-                        */
-                        iteration[itemName] = {
-                            __fullname: fullName,
-                            __type: "function",
-                            __description: doc.description,
-                            __signatures: rememberReferenceInSignatures((doc as FunctionTypeNotation).signatures)
-                        } as FunctionDescription;
-                        break;
-                    case "event":
-                        /*
-                        TODO: methods and onevents must be distingushable (by __type?)
-                        Do FunctionDescription have to allow "function"|"?" <- What name? callback?
-                        */
-                        let delegateType = extractJSOrCppType((doc as EventTypeNotation).delegate);
-                        rememberType(delegateType);
-                        iteration[itemName] = {
-                            __fullname: fullName,
-                            __type: "event",
-                            __description: doc.description,
-                            __delegate: extractJSOrCppType(delegateType)
-                        } as EventDescription;
-                        break;
-                    case "property": {
-                        let propertyType = extractJSOrCppType((doc as PropertyTypeNotation).name);
-                        rememberType(propertyType);
-                        iteration[itemName] = {
-                            __fullname: fullName,
-                            __type: propertyType,
-                            __description: doc.description
-                        } as TypeDescription;
-                        break;
-                    }
-                    default: {
-                        throw new Error(`Unexpected document type: ${doc.type}`);
-                    }
-                }
+                iteration[itemName] = getMemberDescription(doc, itemName, fullName);
             }
             else {
                 let fullName = item.__fullname.toLowerCase();
@@ -394,35 +355,82 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
             for (let interf of interfaces) {
                 rememberType(interf);
             }
-            /* TODO: remember type from interface members */
-            let members = (doc as InterfaceTypeNotation).members;
-            for (let method of members.methods) {
-                let doc = docs[method.toLowerCase()] as FunctionTypeNotation;
-                if (!doc) {
-                    continue;
-                }
-                if (doc.type !== "function") {
-                    throw new Error(`Expected function type documentation but found ${doc.type}`);
-                }
-                rememberReferenceInSignatures(doc.signatures);
-            }
-            for (let property of members.properties) {
-                let doc = docs[property.toLowerCase()] as PropertyTypeNotation;
-                if (!doc) {
-                    continue;
-                }
-                if (doc.type !== "property") {
-                    throw new Error(`Expected property type documentation but found ${doc.type}`);
-                }
-                rememberType(extractJSOrCppType(doc.name));
-            }
-            parentNamespace[getShortName(typeReference)] = {
+
+            let description: InterfaceDescription = {
                 __fullname: typeReference,
                 __description: doc.description,
                 __type: "interface",
                 __interfaces: interfaces,
                 __typeParameters: (doc as InterfaceTypeNotation).typeParameters
-            } as InterfaceDescription;
+            };
+
+            let members = (doc as InterfaceTypeNotation).members;
+            for (let method of members.methods) {
+                let shortName = getShortName(method);
+                shortName = `${shortName.slice(0, 1).toLowerCase()}${shortName.slice(1)}`;
+                let doc = docs[method.toLowerCase()] as FunctionTypeNotation;
+                if (!doc) {
+                    description[shortName] = "unknown";
+                    continue;
+                }
+                if (doc.type !== "function") {
+                    throw new Error(`Expected function type documentation but found ${doc.type}`);
+                }
+                description[shortName] = getMemberDescription(doc, shortName, method);
+            }
+            for (let property of members.properties) {
+                let shortName = getShortName(property);
+                shortName = `${shortName.slice(0, 1).toLowerCase()}${shortName.slice(1)}`;
+                let doc = docs[property.toLowerCase()] as PropertyTypeNotation;
+                if (!doc) {
+                    description[shortName] = "unknown";
+                    continue;
+                }
+                if (doc.type !== "property") {
+                    throw new Error(`Expected property type documentation but found ${doc.type}`);
+                }
+                description[shortName] = getMemberDescription(doc, shortName, property);
+            }
+            parentNamespace[getShortName(typeReference)] = description;
+        }
+    }
+
+    /**
+     * Note: this automatically remembers referenced types inside notations
+     */
+    function getMemberDescription(doc: TypeNotation, itemName: string, fullName: string) {
+        switch (doc.type) {
+            case "function":
+                /*
+                TODO: interfaces from parser and iterator are too different, should be integrated
+                */
+                return {
+                    __fullname: fullName,
+                    __type: "function",
+                    __description: doc.description,
+                    __signatures: rememberReferenceInSignatures((doc as FunctionTypeNotation).signatures)
+                } as FunctionDescription;
+            case "event":
+                let delegateType = extractJSOrCppType((doc as EventTypeNotation).delegate);
+                rememberType(delegateType);
+                return {
+                    __fullname: fullName,
+                    __type: "event",
+                    __description: doc.description,
+                    __delegate: extractJSOrCppType(delegateType)
+                } as EventDescription;
+            case "property": {
+                let propertyType = extractJSOrCppType((doc as PropertyTypeNotation).name);
+                rememberType(propertyType);
+                return {
+                    __fullname: fullName,
+                    __type: propertyType,
+                    __description: doc.description
+                } as TypeDescription;
+            }
+            default: {
+                throw new Error(`Unexpected document type: ${doc.type}`);
+            }
         }
     }
 
@@ -466,6 +474,10 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
     function rememberType(typeReference: string) {
         let matches = typeReference.match(typeNameRegex);
         for (let match of matches) {
+            let link = getExplicitLink(match);
+            if (link != null) {
+                continue; // linked interfaces should not appear
+            }
             typeReferenceSet.add(match);
         }
     }
@@ -566,8 +578,19 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
             if ((iteration as InterfaceDescription).__typeParameters) {
                 result += `<${(iteration as InterfaceDescription).__typeParameters.join(', ')}>`
             }
-            // TODO: add generic syntax
-            result += ` {}\r\n`;
+            let body = "";
+            for (let itemName in iteration) {
+                if ((itemName as string).startsWith("__") || itemName === "prototype") {
+                    continue;
+                }
+                body += writeMemberLines(indentRepeat + 1, iteration[itemName] as TypeNameOrDescription, itemName);
+            }
+            if (body.length > 0) {
+                result += ` {\r\n${body}${initialIndent}}\r\n`;
+            }
+            else {
+                result += ` {}\r\n`
+            }
             return result;
         }
     }
@@ -603,7 +626,7 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
             if ((itemName as string).startsWith("__") || itemName === "prototype") {
                 continue;
             }
-            result += writeClassMemberLines(indentRepeat + 1, constructor[itemName] as TypeNameOrDescription, itemName, true);
+            result += writeMemberLines(indentRepeat + 1, constructor[itemName] as TypeNameOrDescription, itemName, true);
         }
 
         if (constructor.__staticEventTarget) {
@@ -624,7 +647,7 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
             if ((itemName as string).startsWith("__")) {
                 continue;
             }
-            result += writeClassMemberLines(indentRepeat + 1, prototype[itemName] as TypeNameOrDescription, itemName);
+            result += writeMemberLines(indentRepeat + 1, prototype[itemName] as TypeNameOrDescription, itemName);
         }
 
         if (constructor.__eventTarget) {
@@ -639,7 +662,7 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
         result += initialIndent + '}';
         return result;
     }
-    function writeClassMemberLines(indentRepeat: number, member: TypeNameOrDescription, memberName: string, asStatic?: boolean) {
+    function writeMemberLines(indentRepeat: number, member: TypeNameOrDescription, memberName: string, asStatic?: boolean) {
         let indent = repeatIndent(indentBase, indentRepeat);
         let prefix = asStatic ? "static " : "";
 
