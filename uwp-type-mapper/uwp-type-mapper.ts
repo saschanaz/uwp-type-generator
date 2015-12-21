@@ -424,7 +424,7 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
                 rememberType(propertyType);
                 return {
                     __fullname: fullName,
-                    __type: propertyType,
+                    __type: propertyType, /* TODO: "property" */
                     __description: doc.description
                 } as TypeDescription;
             }
@@ -577,6 +577,9 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
             result += `${initialIndent}interface ${iterationName}`;
             if ((iteration as InterfaceDescription).__typeParameters) {
                 result += `<${(iteration as InterfaceDescription).__typeParameters.join(', ')}>`
+            }
+            if ((iteration as InterfaceDescription).__interfaces.length > 0) {
+                result += ` extends ${(iteration as InterfaceDescription).__interfaces.map(interf => typeLinker(interf)).join(', ')}`;
             }
             let body = "";
             for (let itemName in iteration) {

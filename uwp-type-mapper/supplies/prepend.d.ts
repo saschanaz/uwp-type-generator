@@ -4,14 +4,17 @@
 // Generator: uwp-type-generator <https://github.com/saschanaz/uwp-type-generator>
 // Definitions: https://github.com/borisyankov/DefinitelyTyped
 
-declare interface WinRTError extends Error {
-    description: string;
-    number: number;
-}
-declare interface WinRTEvent<TSender> {
-    detail: any[];
-    target: TSender;
-    type: string;
+declare namespace Windows {
+    interface WinRTError extends Error {
+        description: string;
+        number: number;
+    }
+    interface WinRTEvent<TSender> {
+        detail: any[];
+        target: TSender;
+        type: string;
+    }
+    interface IInspectable { /* TODO: No UWP document exists */ }
 }
 
 declare namespace Windows.Foundation {
@@ -31,8 +34,23 @@ declare namespace Windows.Foundation {
     type IPromiseWithIAsyncActionWithProgress<TProgress> = IPromiseWithOperation<void, IAsyncActionWithProgress<TProgress>>;
     type IPromiseWithIAsyncOperation<TResult> = IPromiseWithOperation<TResult, IAsyncOperation<TResult>>;
     type IPromiseWithIAsyncOperationWithProgress<TResult, TProgress> = IPromiseWithOperation<TResult, IAsyncOperationWithProgress<TResult, TProgress>>;
+    
+    namespace Collections {
+        interface IVector<T> extends Array<T> {
+            indexOf(value: T, ...extra: any[]): { index: number; returnValue: boolean; } /* hack */
+            indexOf(searchElement: T, fromIndex?: number): number; /* hack */
+        }
+        interface IVectorView<T> extends Array<T> {
+            indexOf(value: T, ...extra: any[]): { index: number; returnValue: boolean; } /* hack */
+            indexOf(searchElement: T, fromIndex?: number): number; /* hack */
+        }
+    }
 }
-
 declare namespace Windows.Media.Core {
     interface MseStreamSource { /* TODO, this class is inaccessible on JS environment */ }
+}
+declare namespace Windows.Networking.Sockets {
+    interface IWebSocket {
+        close(): void; /* hack: redeclare overload */
+    }
 }
