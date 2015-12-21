@@ -1,8 +1,8 @@
 ﻿// Type definitions for Universal Windows Platform
 // Project: http://msdn.microsoft.com/en-us/library/windows/apps/br211377.aspx
 // Definitions by: Kagami Sascha Rosylight <https://github.com/saschanaz>, Taylor Starfield <https://github.com/taylor224>
-// Generator: uwp-type-generator <https://github.com/saschanaz/uwp-type-generator>
 // Definitions: https://github.com/borisyankov/DefinitelyTyped
+// Generator: uwp-type-generator <https://github.com/saschanaz/uwp-type-generator>
 
 declare namespace Windows {
     interface WinRTError extends Error {
