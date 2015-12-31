@@ -112,21 +112,24 @@ async function main() {
                 lowerCase = linkedType.toLowerCase();
             }
 
-            let doc = docs[lowerCase];
-            if (doc && doc.type !== "interface") {
-                references.push(match);
-                return match;
-            }
-            let interfaceMatch = match.match(interfaceMarkerRegex);
-            if (!interfaceMatch) {
-                references.push(match);
-                return match;
-            }
-            let valueName = match.replace(interfaceMarkerRegex, ".$1");
-            if (valueName.toLowerCase() in docs) {
-                references.push(valueName);
-                return valueName;
-            }
+            // TODO: code below is not always valid
+            // Example: RandomAccessStream does not implement IRandomAccessStream
+
+            //let doc = docs[lowerCase];
+            //if (doc && doc.type !== "interface") {
+            //    references.push(match);
+            //    return match;
+            //}
+            //let interfaceMatch = match.match(interfaceMarkerRegex);
+            //if (!interfaceMatch) {
+            //    references.push(match);
+            //    return match;
+            //}
+            //let valueName = match.replace(interfaceMarkerRegex, ".$1");
+            //if (valueName.toLowerCase() in docs) {
+            //    references.push(valueName);
+            //    return valueName;
+            //}
             references.push(match);
             return match;
         });
