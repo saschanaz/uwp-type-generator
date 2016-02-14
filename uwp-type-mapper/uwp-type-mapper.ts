@@ -770,7 +770,9 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
             result += `${indent} * @param ${parameter.key} ${parameter.description}\r\n`;
         }
         let ret = signature.return;
-        if (ret && typeof ret !== "string") {
+        if (ret && typeof ret !== "string" && ret.description /* can be empty when type is unknown or complex*/) {
+            // TODO: write a correct JSDoc for complex return type
+            // http://stackoverflow.com/a/19326949/2460034
             result += `${indent} * @return ${ret.description}\r\n`
         }
         result += `${indent} */\r\n`;

@@ -34,7 +34,7 @@ declare namespace Windows.Foundation {
     type IPromiseWithIAsyncActionWithProgress<TProgress> = IPromiseWithOperation<void, IAsyncActionWithProgress<TProgress>>;
     type IPromiseWithIAsyncOperation<TResult> = IPromiseWithOperation<TResult, IAsyncOperation<TResult>>;
     type IPromiseWithIAsyncOperationWithProgress<TResult, TProgress> = IPromiseWithOperation<TResult, IAsyncOperationWithProgress<TResult, TProgress>>;
-    
+
     namespace Collections {
         interface IVector<T> extends Array<T> {
             indexOf(value: T, ...extra: any[]): { index: number; returnValue: boolean; } /* hack */
