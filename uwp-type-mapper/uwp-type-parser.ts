@@ -627,11 +627,16 @@ async function parseAsMap() {
         // ignore '[text]' formed paragraphs
         // https://msdn.microsoft.com/en-us/library/windows/apps/windows.ui.input.inking.inkmanager.aspx
         let nextElement = element;
+        let prefix = "";
         while (nextElement && nextElement.tagName !== beforeElement) {
             if (nextElement.tagName === "P") {
+                if (nextElement.firstElementChild && nextElement.firstElementChild.tagName === "IMG") {
+                    prefix += `(${(nextElement.firstElementChild as HTMLImageElement).alt}) `;
+                }
+
                 let text = nextElement.textContent.trim();
-                if (!text.startsWith('[') || !text.endsWith(']')) {
-                    return inline(nextElement.textContent.trim());
+                if (text && (!text.startsWith('[') || !text.endsWith(']'))) {
+                    return prefix + inline(nextElement.textContent.trim());
                 }
             }
             nextElement = nextElement.nextElementSibling;
