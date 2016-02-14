@@ -249,9 +249,9 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
 
             let item = iteration[itemName] as TypeNameOrDescription;
             if (typeof item === "string") {
-                let fullName = `${iteration.__fullname}.${itemName}`.toLowerCase();
+                let fullName = `${iteration.__fullname}.${itemName}`;
 
-                let doc = docs[fullName] as NamedTypeNotation;
+                let doc = docs[fullName.toLowerCase()] as NamedTypeNotation;
                 if (!doc) {
                     continue;
                 }
@@ -259,8 +259,8 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
                 iteration[itemName] = getMemberDescription(doc, itemName, fullName);
             }
             else {
-                let fullName = item.__fullname.toLowerCase();
-                let doc = docs[fullName] as NamedTypeNotation;
+                let fullName = item.__fullname;
+                let doc = docs[fullName.toLowerCase()] as NamedTypeNotation;
                 if (doc) {
                     item.__description = doc.description;
                 }
@@ -299,7 +299,7 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
 
 
                     let ctorFullName = `${fullName}.constructor`;
-                    let ctorDoc = docs[ctorFullName] as FunctionTypeNotation;
+                    let ctorDoc = docs[ctorFullName.toLowerCase()] as FunctionTypeNotation;
                     if (ctorDoc) {
                         item["__constructor"] = {
                             __fullname: ctorFullName,
@@ -895,7 +895,7 @@ function writeAsDTS(baseIteration: TypeDescription, typeLinker: (typeName: strin
         return delegateDesc;
     }
     function tryNormalizeAsyncCallReturnType(functionDesc: FunctionDescription) {
-        if (!functionDesc.__fullname.endsWith("async")) {
+        if (!functionDesc.__fullname.endsWith("Async")) {
             // Only for fooAsync-formed methods
             return functionDesc;
         }

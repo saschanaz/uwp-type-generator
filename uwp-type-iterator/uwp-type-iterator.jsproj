@@ -40,7 +40,7 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>f945cffe-9558-4dd9-814b-5bed35ed8f07</ProjectGuid>
-    <TypeScriptToolsVersion>1.7</TypeScriptToolsVersion>
+    <TypeScriptToolsVersion>1.8</TypeScriptToolsVersion>
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <TypeScriptNoImplicitAny>true</TypeScriptNoImplicitAny>
