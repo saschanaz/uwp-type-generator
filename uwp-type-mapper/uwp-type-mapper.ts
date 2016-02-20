@@ -46,6 +46,53 @@ interface DelegateDescription extends TypeDescription { __type: "delegate"; __si
 interface InterfaceDescription extends TypeDescription { __type: "interface"; __interfaces: string[]; __typeParameters: string[]; }
 interface InterfaceLiteralDescription extends TypeDescription { __type: "interfaceliteral"; __members: DescribedKeyTypePair[]; }
 
+class TypeReferenceMemory {
+    static typeNameRegex = /[\w\.\:]+/g;
+
+    memorySet = new Set<string>();
+    private _getExplicitLink: (typeName: string) => string;
+
+    constructor(getExplicitLink: (typeName: string) => string) {
+        this._getExplicitLink = getExplicitLink;
+    }
+
+    memorizeReferenceInSignatures(signatures: FunctionSignature[]) {
+        for (let signature of signatures) {
+            this.memorizeReferenceInSignature(signature);
+        }
+        return signatures;
+    }
+
+    memorizeReferenceInSignature(signature: FunctionSignature) {
+        for (let parameter of signature.parameters) {
+            this.memorizeType(extractJSOrCppType(parameter.type));
+        }
+        if (signature.return && typeof signature.return !== "string") {
+            this.memorizeType(extractJSOrCppType((signature.return as TypeNotation).type));
+        }
+        return signature;
+    }
+
+    memorizeReferencesFromKeyTypePairs(pairs: DescribedKeyTypePair[]) {
+        for (let pair of pairs) {
+            this.memorizeType(extractJSOrCppType(pair.type));
+        }
+        return pairs;
+    }
+
+    memorizeType(typeReference: string) {
+        let matches = typeReference.match(TypeReferenceMemory.typeNameRegex);
+        for (let match of matches) {
+            let link = this._getExplicitLink(match);
+            if (link != null) {
+                continue; // linked interfaces should not appear
+            }
+            this.memorySet.add(match);
+        }
+    }
+
+}
+
 async function main() {
     let args = parseArgs();
     if (!args["-i"]) {
@@ -78,7 +125,7 @@ async function main() {
     let iterations = JSON.parse(await fspromise.readFile(args["-i"]));
 
     console.log("Mapping...");
-    map(iterations, docs, nameMap, (typeName) => typelink[typeName]);
+    map(iterations, docs, nameMap, new TypeReferenceMemory(typeName => typelink[typeName]));
 
     if (args["-mapout"]) {
         // for debugging purpose
@@ -136,7 +183,7 @@ async function main() {
 
         let remainingGenericMatch = result.match(remainingTypeParameterSyntaxRegex);
         if (remainingGenericMatch) {
-            // e.g. Windows.Foundation.IReference
+            // e.g. Windows.Foundation.IReference<Foo> -> <Foo> // remove <> here
             result = remainingGenericMatch[1];
         }
 
@@ -220,7 +267,7 @@ async function main() {
     }
 }
 
-function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, string>, getExplicitLink: (typeName: string) => string) {
+function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, string>, referenceMemory: TypeReferenceMemory) {
     /*
     interface mapping?
 
@@ -232,11 +279,9 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
     for referenced typename: if map.has(typeName) then namespace[typeName] = interfaceLiteralDescription;
     */
     let genericsRegex = /<(.+)>$/;
-    let typeNameRegex = /[\w\.\:]+/g;
 
     let nonValueTypeParentNamespaceMap = new Map<string, TypeDescription>();
-    let typeReferenceSet = new Set<string>();
-    typeReferenceSet.add("Windows.Foundation.EventHandler"); // documents reference this incorrectly
+    referenceMemory.memorySet.add("Windows.Foundation.EventHandler"); // documents reference this incorrectly
     //typeReferenceSet.add("Windows.Foundation.AsyncActionProgressHandler"); // only referenced from interfaces
     //typeReferenceSet.add("Windows.Foundation.AsyncActionWithProgressCompletedHandler"); // only referenced from interfaces
     mapItem(parentIteration);
@@ -305,7 +350,7 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
                             __fullname: ctorFullName,
                             __description: ctorDoc.description,
                             __type: "function",
-                            __signatures: rememberReferenceInSignatures(ctorDoc.signatures)
+                            __signatures: referenceMemory.memorizeReferenceInSignatures(ctorDoc.signatures)
                         } as FunctionDescription;
                     }
 
@@ -324,7 +369,7 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
         }
     }
 
-    for (let typeReference of typeReferenceSet) {
+    for (let typeReference of referenceMemory.memorySet) {
         let lowerCase = typeReference.toLowerCase();
         if (nameMap.has(lowerCase)) {
             typeReference = nameMap.get(lowerCase);
@@ -342,7 +387,7 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
                 __fullname: typeReference,
                 __description: doc.description,
                 __type: "interfaceliteral",
-                __members: rememberReferencesFromKeyTypePairs((doc as StructureTypeNotation).members)
+                __members: referenceMemory.memorizeReferencesFromKeyTypePairs((doc as StructureTypeNotation).members)
             } as InterfaceLiteralDescription;
         }
         else if (doc.type === "delegate") {
@@ -350,13 +395,13 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
                 __fullname: typeReference,
                 __description: doc.description,
                 __type: "delegate",
-                __signature: rememberReferenceInSignature((doc as DelegateTypeNotation).signature)
+                __signature: referenceMemory.memorizeReferenceInSignature((doc as DelegateTypeNotation).signature)
             } as DelegateDescription;
         }
         else if (doc.type === "interface") {
             let interfaces = (doc as InterfaceTypeNotation).interfaces;
             for (let interf of interfaces) {
-                rememberType(interf);
+                referenceMemory.memorizeType(interf);
             }
 
             let description: InterfaceDescription = {
@@ -411,11 +456,11 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
                     __fullname: fullName,
                     __type: "function",
                     __description: doc.description,
-                    __signatures: rememberReferenceInSignatures((doc as FunctionTypeNotation).signatures)
+                    __signatures: referenceMemory.memorizeReferenceInSignatures((doc as FunctionTypeNotation).signatures)
                 } as FunctionDescription;
             case "event":
                 let delegateType = extractJSOrCppType((doc as EventTypeNotation).delegate);
-                rememberType(delegateType);
+                referenceMemory.memorizeType(delegateType);
                 return {
                     __fullname: fullName,
                     __type: "event",
@@ -424,7 +469,7 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
                 } as EventDescription;
             case "property": {
                 let propertyType = extractJSOrCppType((doc as PropertyTypeNotation).name);
-                rememberType(propertyType);
+                referenceMemory.memorizeType(propertyType);
                 return {
                     __fullname: fullName,
                     __type: propertyType, /* TODO: "property" */
@@ -448,41 +493,6 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
             }
         }
         return false;
-    }
-
-    function rememberReferenceInSignatures(signatures: FunctionSignature[]) {
-        for (let signature of signatures) {
-            rememberReferenceInSignature(signature);
-        }
-        return signatures;
-    }
-
-    function rememberReferenceInSignature(signature: FunctionSignature) {
-        for (let parameter of signature.parameters) {
-            rememberType(extractJSOrCppType(parameter.type));
-        }
-        if (signature.return && typeof signature.return !== "string") {
-            rememberType(extractJSOrCppType((signature.return as TypeNotation).type));
-        }
-        return signature;
-    }
-    
-    function rememberReferencesFromKeyTypePairs(pairs: DescribedKeyTypePair[]) {
-        for (let pair of pairs) {
-            rememberType(extractJSOrCppType(pair.type));
-        }
-        return pairs;
-    }
-
-    function rememberType(typeReference: string) {
-        let matches = typeReference.match(typeNameRegex);
-        for (let match of matches) {
-            let link = getExplicitLink(match);
-            if (link != null) {
-                continue; // linked interfaces should not appear
-            }
-            typeReferenceSet.add(match);
-        }
     }
 
     function getShortName(longName: string) {
