@@ -487,11 +487,10 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
 
     function getShortName(longName: string) {
         let split = longName.split('.');
-        let shortName = split[split.length - 1];
-        if (!shortName) {
+        if (split.length < 2) {
             throw new Error(`Expected dot notation but not found: ${longName}`);
         }
-        return shortName;
+        return split[split.length - 1];
     }
 }
 
