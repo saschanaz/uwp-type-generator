@@ -196,9 +196,11 @@ async function parseAsMap() {
                         if (table.tagName !== "TABLE") {
                             throw new Error(`Expected TABLE element but found ${table.tagName}`);
                         }
+                        const methodSet = new Set<string>();
                         for (let item of scanMemberTableItems(table)) {
-                            notation.members.methods.push(removeParentheses(item.linkName));
+                            methodSet.add(removeParentheses(item.linkName));
                         }
+                        notation.members.methods = Array.from(methodSet);
                     }
                 }
                 {
