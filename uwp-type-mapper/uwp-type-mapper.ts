@@ -25,6 +25,10 @@ import * as fspromise from "./fspromise"
 
 main().catch((err) => console.error(err));
 
+interface ExtendedInterfaceTypeNotation extends InterfaceTypeNotation {
+    extensions?: string[];
+}
+
 interface InterfaceLiteralTypeNotation extends NamedTypeNotation {
     type: "interfaceliteral"
     members: DescribedKeyTypePair[];
@@ -50,9 +54,11 @@ class TypeReferenceMemory {
     static typeNameRegex = /[\w\.\:]+/g;
 
     memorySet = new Set<string>();
+    private _nameMap: Map<string, string>;
     private _getExplicitLink: (typeName: string) => string;
 
-    constructor(getExplicitLink: (typeName: string) => string) {
+    constructor(nameMap: Map<string, string>, getExplicitLink: (typeName: string) => string) {
+        this._nameMap = nameMap;
         this._getExplicitLink = getExplicitLink;
     }
 
@@ -86,6 +92,11 @@ class TypeReferenceMemory {
             let link = this._getExplicitLink(match);
             if (link != null) {
                 continue; // linked interfaces should not appear
+            }
+
+            let lowerCase = match.toLowerCase();
+            if (this._nameMap.has(lowerCase)) {
+                match = this._nameMap.get(lowerCase);
             }
             this.memorySet.add(match);
         }
@@ -124,8 +135,11 @@ async function main() {
     console.log("Loading iteration file...");
     let iterations = JSON.parse(await fspromise.readFile(args["-i"]));
 
+    console.log("Merging interface extensions...");
+    mergeInterfaceExtensions(docs);
+
     console.log("Mapping...");
-    map(iterations, docs, nameMap, new TypeReferenceMemory(typeName => typelink[typeName]));
+    map(iterations, docs, new TypeReferenceMemory(nameMap, typeName => typelink[typeName]));
 
     if (args["-mapout"]) {
         // for debugging purpose
@@ -267,7 +281,64 @@ async function main() {
     }
 }
 
-function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, string>, referenceMemory: TypeReferenceMemory) {
+function mergeInterfaceExtensions(docs: any) {
+    const lastNumber = /\d$/;
+    //const log: string[] = [];
+
+    for (const name of Object.getOwnPropertyNames(docs)) {
+        const doc = docs[name] as ExtendedInterfaceTypeNotation;
+        if (doc.type !== "interface") {
+            continue;
+        }
+        if (name.match(lastNumber)) {
+            // should be processed by base interface that has no number postfix
+            continue;
+        }
+
+        let i = 2;
+        const extensions: string[] = [];
+        while (true) {
+            let nextName = `${name}${i}`;
+            let next = docs[nextName] as InterfaceTypeNotation;
+            if (!next) {
+                break;
+            }
+            if (next.type !== "interface") {
+                throw new Error(`Expected 'interface' type notation but saw '${next.type}'`);
+            }
+
+            // TODO: use shortName rather than fullName (fullName never collides)
+            for (const method of next.members.methods) {
+                if (doc.members.methods.indexOf(method) !== -1) {
+                    throw new Error(`Duplicate method ${method} on ${name}${i}`);
+                }
+            }
+            for (const property of next.members.properties) {
+                if (doc.members.properties.indexOf(property) !== -1) {
+                    throw new Error(`Duplicate method ${property} on ${name}${i}`);
+                }
+            }
+
+            extensions.push(nextName);
+            /*
+            TODO: add reference to extensions
+            merging just members won't work as the full name will be different
+
+            change name: windows.storage.istoragefolder2.method -> windows.storage.istoragefolder.method
+
+            or add 'extensions' field on interface notation
+            */ 
+
+            i++;
+        }
+        if (extensions.length > 0) {
+            //log.push(name);
+            doc.extensions = extensions;
+        }
+    }
+}
+
+function map(parentIteration: TypeDescription, docs: any, referenceMemory: TypeReferenceMemory) {
     /*
     interface mapping?
 
@@ -369,11 +440,8 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
         }
     }
 
+    // register types that are referenced by methods/properties at least once
     for (let typeReference of referenceMemory.memorySet) {
-        let lowerCase = typeReference.toLowerCase();
-        if (nameMap.has(lowerCase)) {
-            typeReference = nameMap.get(lowerCase);
-        }
         let doc = docs[typeReference.toLowerCase()] as TypeNotation;
         if (!doc) {
             continue;
@@ -399,48 +467,79 @@ function map(parentIteration: TypeDescription, docs: any, nameMap: Map<string, s
             } as DelegateDescription;
         }
         else if (doc.type === "interface") {
-            let interfaces = (doc as InterfaceTypeNotation).interfaces;
-            for (let interf of interfaces) {
-                referenceMemory.memorizeType(interf);
-            }
-
-            let description: InterfaceDescription = {
-                __fullname: typeReference,
-                __description: doc.description,
-                __type: "interface",
-                __interfaces: interfaces,
-                __typeParameters: (doc as InterfaceTypeNotation).typeParameters
-            };
-
-            let members = (doc as InterfaceTypeNotation).members;
-            for (let method of members.methods) {
-                let shortName = getShortName(method);
-                shortName = `${shortName.slice(0, 1).toLowerCase()}${shortName.slice(1)}`;
-                let doc = docs[method.toLowerCase()] as FunctionTypeNotation;
-                if (!doc) {
-                    description[shortName] = "unknown";
-                    continue;
-                }
-                if (doc.type !== "function") {
-                    throw new Error(`Expected function type documentation but found ${doc.type}`);
-                }
-                description[shortName] = getMemberDescription(doc, shortName, method);
-            }
-            for (let property of members.properties) {
-                let shortName = getShortName(property);
-                shortName = `${shortName.slice(0, 1).toLowerCase()}${shortName.slice(1)}`;
-                let doc = docs[property.toLowerCase()] as PropertyTypeNotation;
-                if (!doc) {
-                    description[shortName] = "unknown";
-                    continue;
-                }
-                if (doc.type !== "property") {
-                    throw new Error(`Expected property type documentation but found ${doc.type}`);
-                }
-                description[shortName] = getMemberDescription(doc, shortName, property);
-            }
-            parentNamespace[getShortName(typeReference)] = description;
+            parentNamespace[getShortName(typeReference)] = getInterfaceDescription(typeReference, doc as ExtendedInterfaceTypeNotation);
         }
+    }
+
+    function getInterfaceDescription(fullname: string, doc: ExtendedInterfaceTypeNotation) {
+        let interfaces = (doc as InterfaceTypeNotation).interfaces;
+        for (let interf of interfaces) {
+            referenceMemory.memorizeType(interf);
+        }
+
+        let description: InterfaceDescription = {
+            __fullname: fullname,
+            __description: doc.description,
+            __type: "interface",
+            __interfaces: interfaces,
+            __typeParameters: (doc as InterfaceTypeNotation).typeParameters
+        };
+
+        let members = (doc as InterfaceTypeNotation).members;
+        for (let method of members.methods) {
+            let shortName = getShortName(method);
+            shortName = `${shortName.slice(0, 1).toLowerCase()}${shortName.slice(1)}`;
+            let doc = docs[method.toLowerCase()] as FunctionTypeNotation;
+            if (!doc) {
+                description[shortName] = "unknown";
+                continue;
+            }
+            if (doc.type !== "function") {
+                throw new Error(`Expected function type documentation but found ${doc.type}`);
+            }
+            description[shortName] = getMemberDescription(doc, shortName, method);
+        }
+        for (let property of members.properties) {
+            let shortName = getShortName(property);
+            shortName = `${shortName.slice(0, 1).toLowerCase()}${shortName.slice(1)}`;
+            let doc = docs[property.toLowerCase()] as PropertyTypeNotation;
+            if (!doc) {
+                description[shortName] = "unknown";
+                continue;
+            }
+            if (doc.type !== "property") {
+                throw new Error(`Expected property type documentation but found ${doc.type}`);
+            }
+            description[shortName] = getMemberDescription(doc, shortName, property);
+        }
+
+        if (doc.extensions) {
+            for (const extensionName of doc.extensions) {
+                const extension = docs[extensionName] as ExtendedInterfaceTypeNotation;
+                if (extension.type !== "interface") {
+                    throw new Error(`Expected 'interface' type but saw ${extension.type}`);
+                }
+                const extensionDescription = getInterfaceDescription(extensionName, extension);
+                for (const key of Object.getOwnPropertyNames(extensionDescription)) {
+                    if (key.startsWith("__")) {
+                        continue;
+                    }
+                    if (description[key]) {
+                        const originalMemberDescription = description[key] as FunctionDescription;
+                        const extensionMemberDescription = extensionDescription[key] as FunctionDescription;
+                        if (originalMemberDescription.__type !== "function" || extensionMemberDescription.__type !== "function") {
+                            throw new Error(`Expected two 'function' types but saw ${originalMemberDescription.__type} + ${extensionMemberDescription.__type}`);
+                        }
+                        originalMemberDescription.__signatures.push(...extensionMemberDescription.__signatures);
+                    }
+                    else {
+                        description[key] = extensionDescription[key];
+                    }
+                }
+            }
+        }
+
+        return description;
     }
 
     /**
