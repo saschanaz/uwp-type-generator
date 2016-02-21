@@ -50,9 +50,28 @@ interface DelegateDescription extends TypeDescription { __type: "delegate"; __si
 interface InterfaceDescription extends TypeDescription { __type: "interface"; __interfaces: string[]; __typeParameters: string[]; }
 interface InterfaceLiteralDescription extends TypeDescription { __type: "interfaceliteral"; __members: DescribedKeyTypePair[]; }
 
-class TypeReferenceMemory {
-    static typeNameRegex = /[\w\.\:]+/g;
+namespace TypeNameUtility {
+    export const typeNameRegex = /[\w\.\:]+/g;
+    export function matchTypeNames(text: string) {
+        return text.match(typeNameRegex);
+    }
 
+    export const shortNameRegex = /\.(\w+)$/;
+    export function tryGetShortName(fullName: string) {
+        const match = fullName.match(shortNameRegex);
+        return match && match[1];
+    }
+
+    export function getShortName(fullName: string) {
+        const shortName = tryGetShortName(fullName);
+        if (!shortName) {
+            throw new Error(`Expected dot notation but not found: ${fullName}`);
+        }
+        return shortName;
+    }
+}
+
+class TypeReferenceMemory {
     memorySet = new Set<string>();
     private _nameMap: Map<string, string>;
     private _getExplicitLink: (typeName: string) => string;
@@ -87,7 +106,7 @@ class TypeReferenceMemory {
     }
 
     memorizeType(typeReference: string) {
-        let matches = typeReference.match(TypeReferenceMemory.typeNameRegex);
+        let matches = TypeNameUtility.matchTypeNames(typeReference);
         for (let match of matches) {
             let link = this._getExplicitLink(match);
             if (link != null) {
@@ -154,13 +173,12 @@ async function main() {
     process.exit();
 
     function tryLinkType(typeName: string) {
-        let typeNameRegex = /[\w\.\:]+/g;
         let remainingTypeParameterSyntaxRegex = /^<(.+)>$/;
         let interfaceMarkerRegex = /\.I([A-Z]\w+)/;
         // let requiredTypeParameterNotExistRegex = /IVectorView(?:,|>|$)/
 
         let references: string[] = [];
-        let result = typeName.replace(typeNameRegex, (match) => {
+        let result = typeName.replace(TypeNameUtility.typeNameRegex, (match) => {
             let lowerCase = match.toLowerCase();
             if (nameMap.has(lowerCase)) {
                 match = nameMap.get(lowerCase);
@@ -232,14 +250,13 @@ async function main() {
         automate name resolution instead of enumerating all of them in typelink
         TODO: docs
         */
-        let shortNameRegex = /\.(\w+)$/;
         let map = new Map<string, string>();
         let duplications = new Set<string>();
 
         let names = Object.getOwnPropertyNames(docs);
         for (let name of names) {
-            let match = name.match(shortNameRegex);
-            if (!match) {
+            let shortName = TypeNameUtility.tryGetShortName(name);
+            if (!shortName) {
                 continue;
             }
             let doc = docs[name] as NamedTypeNotation;
@@ -251,14 +268,14 @@ async function main() {
 
                 continue;
             }
-            if (duplications.has(match[1])) {
+            if (duplications.has(shortName)) {
                 continue;
             }
-            if (map.has(match[1])) {
-                map.delete(match[1]);
-                duplications.add(match[1]);
+            if (map.has(shortName)) {
+                map.delete(shortName);
+                duplications.add(shortName);
             };
-            map.set(match[1], doc.camelId);
+            map.set(shortName, doc.camelId);
         }
 
         for (let duplication of duplications) {
@@ -307,12 +324,9 @@ function mergeInterfaceExtensions(docs: any) {
                 throw new Error(`Expected 'interface' type notation but saw '${next.type}'`);
             }
 
+            // TODO: check method signature collision?
+
             // TODO: use shortName rather than fullName (fullName never collides)
-            for (const method of next.members.methods) {
-                if (doc.members.methods.indexOf(method) !== -1) {
-                    throw new Error(`Duplicate method ${method} on ${name}${i}`);
-                }
-            }
             for (const property of next.members.properties) {
                 if (doc.members.properties.indexOf(property) !== -1) {
                     throw new Error(`Duplicate method ${property} on ${name}${i}`);
@@ -320,15 +334,6 @@ function mergeInterfaceExtensions(docs: any) {
             }
 
             extensions.push(nextName);
-            /*
-            TODO: add reference to extensions
-            merging just members won't work as the full name will be different
-
-            change name: windows.storage.istoragefolder2.method -> windows.storage.istoragefolder.method
-
-            or add 'extensions' field on interface notation
-            */ 
-
             i++;
         }
         if (extensions.length > 0) {
@@ -451,7 +456,7 @@ function map(parentIteration: TypeDescription, docs: any, referenceMemory: TypeR
             continue;
         }
         if (doc.type === "structure") {
-            parentNamespace[getShortName(typeReference)] = {
+            parentNamespace[TypeNameUtility.getShortName(typeReference)] = {
                 __fullname: typeReference,
                 __description: doc.description,
                 __type: "interfaceliteral",
@@ -459,7 +464,7 @@ function map(parentIteration: TypeDescription, docs: any, referenceMemory: TypeR
             } as InterfaceLiteralDescription;
         }
         else if (doc.type === "delegate") {
-            parentNamespace[getShortName(typeReference)] = {
+            parentNamespace[TypeNameUtility.getShortName(typeReference)] = {
                 __fullname: typeReference,
                 __description: doc.description,
                 __type: "delegate",
@@ -467,7 +472,7 @@ function map(parentIteration: TypeDescription, docs: any, referenceMemory: TypeR
             } as DelegateDescription;
         }
         else if (doc.type === "interface") {
-            parentNamespace[getShortName(typeReference)] = getInterfaceDescription(typeReference, doc as ExtendedInterfaceTypeNotation);
+            parentNamespace[TypeNameUtility.getShortName(typeReference)] = getInterfaceDescription(typeReference, doc as ExtendedInterfaceTypeNotation);
         }
     }
 
@@ -487,7 +492,7 @@ function map(parentIteration: TypeDescription, docs: any, referenceMemory: TypeR
 
         let members = (doc as InterfaceTypeNotation).members;
         for (let method of members.methods) {
-            let shortName = getShortName(method);
+            let shortName = TypeNameUtility.getShortName(method);
             shortName = `${shortName.slice(0, 1).toLowerCase()}${shortName.slice(1)}`;
             let doc = docs[method.toLowerCase()] as FunctionTypeNotation;
             if (!doc) {
@@ -500,7 +505,7 @@ function map(parentIteration: TypeDescription, docs: any, referenceMemory: TypeR
             description[shortName] = getMemberDescription(doc, shortName, method);
         }
         for (let property of members.properties) {
-            let shortName = getShortName(property);
+            let shortName = TypeNameUtility.getShortName(property);
             shortName = `${shortName.slice(0, 1).toLowerCase()}${shortName.slice(1)}`;
             let doc = docs[property.toLowerCase()] as PropertyTypeNotation;
             if (!doc) {
@@ -592,14 +597,6 @@ function map(parentIteration: TypeDescription, docs: any, referenceMemory: TypeR
             }
         }
         return false;
-    }
-
-    function getShortName(longName: string) {
-        let split = longName.split('.');
-        if (split.length < 2) {
-            throw new Error(`Expected dot notation but not found: ${longName}`);
-        }
-        return split[split.length - 1];
     }
 }
 

@@ -576,9 +576,6 @@ async function parseAsMap() {
                 }
                 referenceMap.set(lowerCaseId, notation);
             }
-            else if (title.endsWith(" interface")) {
-                continue;
-            }
             else if (title.endsWith(" constructors") || title.endsWith(" methods") || title === "Content Removed") {
                 continue; // Do not parse meta pages
             }
