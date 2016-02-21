@@ -300,7 +300,6 @@ async function main() {
 
 function mergeInterfaceExtensions(docs: any) {
     const lastNumber = /\d$/;
-    //const log: string[] = [];
 
     for (const name of Object.getOwnPropertyNames(docs)) {
         const doc = docs[name] as ExtendedInterfaceTypeNotation;
@@ -314,6 +313,7 @@ function mergeInterfaceExtensions(docs: any) {
 
         let i = 2;
         const extensions: string[] = [];
+        const propertiesShortNames = doc.members.properties.map(TypeNameUtility.getShortName);
         while (true) {
             let nextName = `${name}${i}`;
             let next = docs[nextName] as InterfaceTypeNotation;
@@ -326,9 +326,9 @@ function mergeInterfaceExtensions(docs: any) {
 
             // TODO: check method signature collision?
 
-            // TODO: use shortName rather than fullName (fullName never collides)
+            // check property name collision using getShortName
             for (const property of next.members.properties) {
-                if (doc.members.properties.indexOf(property) !== -1) {
+                if (propertiesShortNames.indexOf(TypeNameUtility.getShortName(property)) !== -1) {
                     throw new Error(`Duplicate method ${property} on ${name}${i}`);
                 }
             }
@@ -337,7 +337,6 @@ function mergeInterfaceExtensions(docs: any) {
             i++;
         }
         if (extensions.length > 0) {
-            //log.push(name);
             doc.extensions = extensions;
         }
     }
