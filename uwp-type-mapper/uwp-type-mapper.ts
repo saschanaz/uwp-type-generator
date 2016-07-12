@@ -174,11 +174,11 @@ async function main() {
 
     function tryLinkType(typeName: string) {
         let remainingTypeParameterSyntaxRegex = /^<(.+)>$/;
-        let interfaceMarkerRegex = /\.I([A-Z]\w+)/;
-        // let requiredTypeParameterNotExistRegex = /IVectorView(?:,|>|$)/
+        //let interfaceMarkerRegex = /\.I([A-Z]\w+)/;
+        //let requiredTypeParameterNotExistRegex = /IVectorView(?:,|>|$)/
 
         let references: string[] = [];
-        let result = typeName.replace(TypeNameUtility.typeNameRegex, (match) => {
+        let result = typeName.replace(TypeNameUtility.typeNameRegex, match => {
             let lowerCase = match.toLowerCase();
             if (nameMap.has(lowerCase)) {
                 match = nameMap.get(lowerCase);
@@ -190,25 +190,6 @@ async function main() {
                 match = linkedType;
                 lowerCase = linkedType.toLowerCase();
             }
-
-            // TODO: code below is not always valid
-            // Example: RandomAccessStream does not implement IRandomAccessStream
-
-            //let doc = docs[lowerCase];
-            //if (doc && doc.type !== "interface") {
-            //    references.push(match);
-            //    return match;
-            //}
-            //let interfaceMatch = match.match(interfaceMarkerRegex);
-            //if (!interfaceMatch) {
-            //    references.push(match);
-            //    return match;
-            //}
-            //let valueName = match.replace(interfaceMarkerRegex, ".$1");
-            //if (valueName.toLowerCase() in docs) {
-            //    references.push(valueName);
-            //    return valueName;
-            //}
             references.push(match);
             return match;
         });
@@ -219,6 +200,7 @@ async function main() {
             result = remainingGenericMatch[1];
         }
 
+        // generate <any> type parameter when required type parameter is missing
         for (let reference of references) {
             let doc = docs[reference.toLowerCase()] as TypeNotation;
             let typeParameterLength: number;
@@ -321,7 +303,7 @@ function mergeInterfaceExtensions(docs: any) {
                 break;
             }
             if (next.type !== "interface") {
-                throw new Error(`Expected 'interface' type notation but saw '${next.type}'`);
+                throw new Error(`Expected 'interface' type notation but saw '${next!.type}'`);
             }
 
             // TODO: check method signature collision?
@@ -499,7 +481,7 @@ function map(parentIteration: TypeDescription, docs: any, referenceMemory: TypeR
                 continue;
             }
             if (doc.type !== "function") {
-                throw new Error(`Expected function type documentation but found ${doc.type}`);
+                throw new Error(`Expected function type documentation but found ${doc!.type}`);
             }
             description[shortName] = getMemberDescription(doc, shortName, method);
         }
@@ -512,7 +494,7 @@ function map(parentIteration: TypeDescription, docs: any, referenceMemory: TypeR
                 continue;
             }
             if (doc.type !== "property") {
-                throw new Error(`Expected property type documentation but found ${doc.type}`);
+                throw new Error(`Expected property type documentation but found ${doc!.type}`);
             }
             description[shortName] = getMemberDescription(doc, shortName, property);
         }
@@ -521,7 +503,7 @@ function map(parentIteration: TypeDescription, docs: any, referenceMemory: TypeR
             for (const extensionName of doc.extensions) {
                 const extension = docs[extensionName] as ExtendedInterfaceTypeNotation;
                 if (extension.type !== "interface") {
-                    throw new Error(`Expected 'interface' type but saw ${extension.type}`);
+                    throw new Error(`Expected 'interface' type but saw ${extension!.type}`);
                 }
                 const extensionDescription = getInterfaceDescription(extensionName, extension);
                 for (const key of Object.getOwnPropertyNames(extensionDescription)) {
